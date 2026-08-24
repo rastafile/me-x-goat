@@ -43,8 +43,9 @@ If you find yourself flipping a sign anywhere else, stop. The bug is elsewhere.
 
 One module, one responsibility. None of them import the server.
 
-- `engine.py` — the only boundary with Stockfish. Returns candidate moves with either
-  a centipawn score or a distance to mate.
+- `engine.py` — the only boundary with Stockfish. Returns an `Analysis` wrapping the
+  candidate moves, each with either a centipawn score or a distance to mate, plus a
+  `loss_cp` helper for how far a candidate sits behind the best one.
 - `game.py` — game state. Wraps `python-chess`. Nothing else touches the board.
 - `persona.py` — pure function. Picks the opponent's move from the candidates using
   style weights. No network, no state, no Stockfish.

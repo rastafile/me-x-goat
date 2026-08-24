@@ -61,14 +61,25 @@ class Candidate:
     mate_in: int | None     # moves to mate; negative means being mated
     pv: list[str]           # principal variation
 
+@dataclass(frozen=True)
+class Analysis:
+    fen: str
+    white_to_move: bool
+    candidates: list[Candidate]   # best to worst; empty on a terminal position
+
+    def loss_cp(self, candidate: Candidate) -> int: ...
+    # centipawns worse than the best candidate, from the mover's point of
+    # view; 0 for the best candidate itself
+
 class Engine:
     def __init__(self, path: str = "stockfish", multipv: int = 5): ...
-    def analyse(self, fen: str, movetime_ms: int) -> list[Candidate]: ...
+    def analyse(self, fen: str, movetime_ms: int) -> Analysis: ...
     def close(self) -> None: ...
 ```
 
-`analyse` returns the list sorted best to worst. Exactly one of `score_cp` and
-`mate_in` is populated.
+`Analysis.candidates` is sorted best to worst. Exactly one of `score_cp` and
+`mate_in` is populated per candidate. A terminal position (checkmate,
+stalemate) has no legal moves, so `candidates` comes back empty.
 
 ### Known traps
 
@@ -107,7 +118,11 @@ switching to the library is a good path.
 - A position with forced mate against returns a negative `mate_in`.
 - Perspective: the same position with White to move and with Black to move produces
   consistent signs after normalization.
-- `close()` terminates the process.
+- A terminal position (checkmate, stalemate) returns an empty candidate list.
+- `loss_cp` is 0 for the best candidate and positive for weaker ones, from the
+  mover's point of view, regardless of color.
+- `close()` terminates the process, is safe to call twice, and kills the process
+  if a clean shutdown fails.
 
 ---
 
