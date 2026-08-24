@@ -108,8 +108,18 @@ sent before `go`, and it persists until changed.
 CPU. Use a context manager.
 
 Note: `python-chess` ships `chess.engine.SimpleEngine`, which handles all of the
-above. Use it. Writing the raw UCI dialogue once, to understand it, and then
-switching to the library is a good path.
+above. The original plan was to write the raw dialogue once, to understand it,
+then switch to the library.
+
+**Reversed in session 3.** By the time the traps above were actually handled —
+closed-pipe detection, idempotent shutdown, the `Analysis`/`loss_cp` layer — the
+raw dialogue had 9 tests built against a faked process pipe and was verified
+against real Stockfish. Switching to `SimpleEngine` would have meant discarding
+working, tested code and rewriting those tests around a different internals
+surface, to save nothing but the UCI plumbing itself, which was already done.
+`python-chess` still enters the project through `game.py`, where the payoff is
+real: the rules are the tedious part, not the protocol. `engine.py` stays on
+the raw dialogue.
 
 ### Tests
 
@@ -276,7 +286,7 @@ prove the three modules talk to each other.
 |---|---|---|
 | 1 | Setup, repository, README, LICENSE | first commit pushed |
 | 2 | `engine.py` with raw UCI dialogue | terminal shows 5 candidates for a position |
-| 3 | `engine.py` tests, switch to `SimpleEngine` | suite green |
+| 3 | `engine.py` hardening and tests (stays on raw UCI — see §1) | suite green |
 | 4 | `game.py`, color selection, tests | Scholar's mate detected; a Black game opens with the opponent |
 | 5 | `persona.py`: structure, short mate, margin | picks among hand-built candidates |
 | 6 | The five heuristics and their tests | suite green |
