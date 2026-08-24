@@ -3,6 +3,8 @@
 import subprocess
 from dataclasses import dataclass
 
+_MATE_SCORE = 100_000  # bridges mate distance onto the cp scale, for loss_cp only
+
 
 class EngineUnavailable(Exception):
     pass
@@ -14,6 +16,28 @@ class Candidate:
     score_cp: int | None
     mate_in: int | None
     pv: list[str]
+
+
+@dataclass(frozen=True)
+class Analysis:
+    fen: str
+    white_to_move: bool
+    candidates: list[Candidate]
+
+    def loss_cp(self, candidate: Candidate) -> int:
+        """Centipawns worse than the best candidate, from the mover's point
+        of view. Zero for the best candidate itself."""
+        best = self.candidates[0]
+        return self._mover_score(best) - self._mover_score(candidate)
+
+    def _mover_score(self, candidate: Candidate) -> int:
+        if candidate.score_cp is not None:
+            white_value = candidate.score_cp
+        else:
+            assert candidate.mate_in is not None
+            sign = 1 if candidate.mate_in > 0 else -1
+            white_value = sign * (_MATE_SCORE - abs(candidate.mate_in))
+        return white_value if self.white_to_move else -white_value
 
 
 class Engine:
@@ -36,7 +60,12 @@ class Engine:
         self._send("isready")
         self._wait_for("readyok")
 
-    def analyse(self, fen: str, movetime_ms: int) -> list[Candidate]:
+    def analyse(self, fen: str, movetime_ms: int) -> Analysis:
+        """Run a fixed-time search and return the candidates, best to worst.
+
+        Terminal positions (checkmate, stalemate) have no legal moves, so
+        `candidates` comes back empty.
+        """
         white_to_move = fen.split()[1] == "w"
         self._send(f"position fen {fen}")
         self._send(f"go movetime {movetime_ms}")
@@ -50,11 +79,17 @@ class Engine:
                 index, candidate = parsed
                 by_index[index] = candidate
 
-        return [by_index[i] for i in sorted(by_index)]
+        candidates = [by_index[i] for i in sorted(by_index)]
+        return Analysis(fen=fen, white_to_move=white_to_move, candidates=candidates)
 
     def close(self) -> None:
-        self._send("quit")
-        self._process.wait(timeout=2)
+        if self._process.poll() is not None:
+            return
+        try:
+            self._send("quit")
+            self._process.wait(timeout=2)
+        except (BrokenPipeError, ValueError, subprocess.TimeoutExpired):
+            self._process.kill()
 
     def __enter__(self) -> "Engine":
         return self
@@ -69,14 +104,20 @@ class Engine:
 
     def _wait_for(self, token: str) -> None:
         assert self._process.stdout is not None
-        for line in self._process.stdout:
+        while True:
+            line = self._process.stdout.readline()
+            if line == "":
+                raise EngineUnavailable("stockfish closed its output stream")
             if token in line:
                 return
 
     def _read_until(self, token: str) -> list[str]:
         assert self._process.stdout is not None
         lines = []
-        for line in self._process.stdout:
+        while True:
+            line = self._process.stdout.readline()
+            if line == "":
+                raise EngineUnavailable("stockfish closed its output stream")
             if line.startswith(token):
                 break
             lines.append(line.strip())

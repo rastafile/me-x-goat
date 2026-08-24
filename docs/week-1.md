@@ -61,14 +61,25 @@ class Candidate:
     mate_in: int | None     # moves to mate; negative means being mated
     pv: list[str]           # principal variation
 
+@dataclass(frozen=True)
+class Analysis:
+    fen: str
+    white_to_move: bool
+    candidates: list[Candidate]   # best to worst; empty on a terminal position
+
+    def loss_cp(self, candidate: Candidate) -> int: ...
+    # centipawns worse than the best candidate, from the mover's point of
+    # view; 0 for the best candidate itself
+
 class Engine:
     def __init__(self, path: str = "stockfish", multipv: int = 5): ...
-    def analyse(self, fen: str, movetime_ms: int) -> list[Candidate]: ...
+    def analyse(self, fen: str, movetime_ms: int) -> Analysis: ...
     def close(self) -> None: ...
 ```
 
-`analyse` returns the list sorted best to worst. Exactly one of `score_cp` and
-`mate_in` is populated.
+`Analysis.candidates` is sorted best to worst. Exactly one of `score_cp` and
+`mate_in` is populated per candidate. A terminal position (checkmate,
+stalemate) has no legal moves, so `candidates` comes back empty.
 
 ### Known traps
 
@@ -97,8 +108,18 @@ sent before `go`, and it persists until changed.
 CPU. Use a context manager.
 
 Note: `python-chess` ships `chess.engine.SimpleEngine`, which handles all of the
-above. Use it. Writing the raw UCI dialogue once, to understand it, and then
-switching to the library is a good path.
+above. The original plan was to write the raw dialogue once, to understand it,
+then switch to the library.
+
+**Reversed in session 3.** By the time the traps above were actually handled —
+closed-pipe detection, idempotent shutdown, the `Analysis`/`loss_cp` layer — the
+raw dialogue had 9 tests built against a faked process pipe and was verified
+against real Stockfish. Switching to `SimpleEngine` would have meant discarding
+working, tested code and rewriting those tests around a different internals
+surface, to save nothing but the UCI plumbing itself, which was already done.
+`python-chess` still enters the project through `game.py`, where the payoff is
+real: the rules are the tedious part, not the protocol. `engine.py` stays on
+the raw dialogue.
 
 ### Tests
 
@@ -107,7 +128,11 @@ switching to the library is a good path.
 - A position with forced mate against returns a negative `mate_in`.
 - Perspective: the same position with White to move and with Black to move produces
   consistent signs after normalization.
-- `close()` terminates the process.
+- A terminal position (checkmate, stalemate) returns an empty candidate list.
+- `loss_cp` is 0 for the best candidate and positive for weaker ones, from the
+  mover's point of view, regardless of color.
+- `close()` terminates the process, is safe to call twice, and kills the process
+  if a clean shutdown fails.
 
 ---
 
@@ -261,7 +286,7 @@ prove the three modules talk to each other.
 |---|---|---|
 | 1 | Setup, repository, README, LICENSE | first commit pushed |
 | 2 | `engine.py` with raw UCI dialogue | terminal shows 5 candidates for a position |
-| 3 | `engine.py` tests, switch to `SimpleEngine` | suite green |
+| 3 | `engine.py` hardening and tests (stays on raw UCI — see §1) | suite green |
 | 4 | `game.py`, color selection, tests | Scholar's mate detected; a Black game opens with the opponent |
 | 5 | `persona.py`: structure, short mate, margin | picks among hand-built candidates |
 | 6 | The five heuristics and their tests | suite green |
