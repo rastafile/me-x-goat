@@ -1,0 +1,158 @@
+"""HTTP endpoints and turn orchestration. No chess logic lives here -- it
+calls game.py, engine.py, and persona.py and shapes their output as JSON.
+
+Holds exactly one game in memory, in app.state: this is a local, single-user
+app, not a multi-tenant service. No sessions, no auth, no game IDs.
+"""
+
+import os
+import sys
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
+from typing import Literal
+
+import chess
+from fastapi import FastAPI, HTTPException
+from pydantic import BaseModel, Field
+
+from src.engine import Analysis, Candidate, Engine, EngineUnavailable
+from src.game import Game, IllegalMove
+from src.persona import choose
+
+# Same shape and interpolation as persona._margin_cp's table; this is an
+# orchestration decision (how long to let the engine think), which belongs
+# here, not in engine.py or persona.py.
+_ANALYSIS_TIME_TABLE = [
+    (800, 50),
+    (1200, 100),
+    (1600, 200),
+    (2000, 400),
+    (2400, 800),
+]
+
+
+class NewGameRequest(BaseModel):
+    color: Literal["white", "black", "random"] = "random"
+    strength: int = Field(default=1400, ge=800, le=2800)
+    style: Literal["carlsen", "raw"] = "carlsen"
+
+
+class MoveRequest(BaseModel):
+    uci: str
+
+
+class GoatMove(BaseModel):
+    uci: str
+    san: str
+    tags: list[str]
+
+
+class GameStateResponse(BaseModel):
+    fen: str
+    user_color: Literal["white", "black"]
+    legal_moves: list[str]
+    goat_move: GoatMove | None
+    evaluation: int | None
+    is_over: bool
+    outcome: str | None
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+    try:
+        engine = Engine(path=os.environ.get("STOCKFISH_PATH", "stockfish"))
+    except EngineUnavailable:
+        print("Stockfish not found. Install it and try again:", file=sys.stderr)
+        print("  macOS:  brew install stockfish", file=sys.stderr)
+        print("  Debian: sudo apt install stockfish", file=sys.stderr)
+        raise
+
+    app.state.engine = engine
+    app.state.game = None
+    app.state.style = "carlsen"
+    app.state.strength = 1400
+    yield
+    engine.close()
+
+
+app = FastAPI(lifespan=lifespan)
+
+
+@app.post("/new-game", response_model=GameStateResponse)
+def new_game(body: NewGameRequest) -> GameStateResponse:
+    game = Game(user_color=body.color)
+    app.state.game = game
+    app.state.style = body.style
+    app.state.strength = body.strength
+
+    goat_move, analysis = None, None
+    if not game.waiting_for_user:
+        goat_move, analysis = _play_goat_move(game, app.state.engine, body.style, body.strength)
+
+    return _state_response(game, goat_move, analysis)
+
+
+@app.post("/move", response_model=GameStateResponse)
+def make_move(body: MoveRequest) -> GameStateResponse:
+    game: Game | None = app.state.game
+    if game is None:
+        raise HTTPException(status_code=400, detail="no game in progress; call /new-game first")
+
+    try:
+        game.push(body.uci)
+    except IllegalMove as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    goat_move, analysis = None, None
+    if not game.is_over():
+        goat_move, analysis = _play_goat_move(game, app.state.engine, app.state.style, app.state.strength)
+
+    return _state_response(game, goat_move, analysis)
+
+
+def _play_goat_move(
+    game: Game, engine: Engine, style: str, strength: int
+) -> tuple[GoatMove, Analysis]:
+    analysis = engine.analyse(game.fen, movetime_ms=_movetime_ms(strength))
+    board_before = chess.Board(game.fen)
+    result = choose(game.fen, analysis.candidates, style=style, strength=strength)
+    game.push(result.move)
+    san = board_before.san(chess.Move.from_uci(result.move))
+    return GoatMove(uci=result.move, san=san, tags=result.tags), analysis
+
+
+def _state_response(
+    game: Game, goat_move: GoatMove | None, analysis: Analysis | None
+) -> GameStateResponse:
+    top_candidate: Candidate | None = None
+    if analysis is not None and analysis.candidates:
+        top_candidate = analysis.candidates[0]
+
+    return GameStateResponse(
+        fen=game.fen,
+        user_color=game.user_color,
+        legal_moves=game.legal_moves(),
+        goat_move=goat_move,
+        evaluation=_evaluation_for_user(top_candidate, game.user_color),
+        is_over=game.is_over(),
+        outcome=game.outcome(),
+    )
+
+
+def _evaluation_for_user(candidate: Candidate | None, user_color: str) -> int | None:
+    if candidate is None or candidate.score_cp is None:
+        return None
+    return candidate.score_cp if user_color == "white" else -candidate.score_cp
+
+
+def _movetime_ms(strength: int) -> int:
+    table = _ANALYSIS_TIME_TABLE
+    if strength <= table[0][0]:
+        return table[0][1]
+    if strength >= table[-1][0]:
+        return table[-1][1]
+    for (lo_strength, lo_time), (hi_strength, hi_time) in zip(table, table[1:]):
+        if lo_strength <= strength <= hi_strength:
+            t = (strength - lo_strength) / (hi_strength - lo_strength)
+            return round(lo_time + t * (hi_time - lo_time))
+    raise AssertionError("unreachable: strength is clamped to the table's range above")
