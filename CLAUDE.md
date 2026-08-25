@@ -51,8 +51,11 @@ One module, one responsibility. None of them import the server.
 - `persona.py` — pure function. Picks the opponent's move from the candidates using
   style weights. No network, no state, no Stockfish.
 - `tutor.py` — pure function. Classifies the user's move. No network, no state.
+- `narration.py` — pure function. Builds the opponent's commentary from tags and an
+  evaluation, no model. This is the degraded-mode text `coach.py` falls back to when
+  narration is unavailable, per the error-handling table in `docs/design.md`.
 - `coach.py` — the only boundary with the narration API. Turns tags and numbers into
-  prose.
+  prose, and falls back to `narration.py`'s text when the API fails.
 - `server.py` — HTTP and orchestration. No chess logic.
 
 `persona.py` and `tutor.py` are pure on purpose: that is what makes them testable

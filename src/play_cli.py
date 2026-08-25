@@ -3,12 +3,14 @@ each other. Not worth polishing -- it disappears in week 2 when the browser
 arrives.
 """
 
+import argparse
 import os
 
 import chess
 
 from src.engine import Engine, EngineUnavailable
 from src.game import Game, IllegalMove
+from src.narration import describe_move
 from src.persona import choose
 
 _STYLE = "carlsen"
@@ -17,6 +19,7 @@ _MOVETIME_MS = 200
 
 
 def main() -> None:
+    args = _parse_args()
     user_color = _ask_color()
     game = Game(user_color=user_color)
     print(f"You are playing {game.user_color}.")
@@ -35,12 +38,22 @@ def main() -> None:
             if game.waiting_for_user:
                 _prompt_and_push_user_move(game)
             else:
-                _play_goat_move(game, engine)
+                _play_goat_move(game, engine, debug=args.debug)
 
     _print_board(game)
     print(f"Game over: {game.outcome()}")
     print()
     print(game.pgn())
+
+
+def _parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--debug",
+        action="store_true",
+        help="show the heuristic tags behind each GOAT move",
+    )
+    return parser.parse_args()
 
 
 def _ask_color() -> str:
@@ -86,13 +99,17 @@ def _normalize_promotion(game: Game, raw: str) -> str:
     return raw
 
 
-def _play_goat_move(game: Game, engine: Engine) -> None:
+def _play_goat_move(game: Game, engine: Engine, debug: bool = False) -> None:
     analysis = engine.analyse(game.fen, movetime_ms=_MOVETIME_MS)
     choice = choose(game.fen, analysis.candidates, style=_STYLE, strength=_STRENGTH)
     board_before = chess.Board(game.fen)
     game.push(choice.move)
     san = board_before.san(chess.Move.from_uci(choice.move))
-    print(f"GOAT plays {san} [tags: {', '.join(choice.tags) or 'none'}]")
+
+    print(f"GOAT plays {san}")
+    print(describe_move(analysis, choice, game))
+    if debug:
+        print(f"  [tags: {', '.join(choice.tags) or 'none'}]")
 
 
 if __name__ == "__main__":
