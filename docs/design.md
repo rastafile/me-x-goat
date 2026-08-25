@@ -32,7 +32,7 @@ Local Python server plus a browser interface on `localhost`. Nothing leaves the
 machine except the narration calls.
 
 ```
-browser (chessground)
+browser (cm-chessboard)
         |
     local HTTP
         |
@@ -58,11 +58,18 @@ persona.py         tutor.py
 | `coach.py` | Turns tags and numbers into natural language via the API. Two distinct voices: GOAT and tutor. | API |
 | `game.py` | Game state, move validation, game-over detection, PGN export. | python-chess |
 | `server.py` | HTTP endpoints and turn orchestration. | all |
-| `web/` | Board, panels, themes, controls. | chessground |
+| `web/` | Board, panels, themes, controls. | cm-chessboard |
 
 Each module has a single responsibility and can be tested in isolation. `persona.py`
 and `tutor.py` are pure functions over the engine's output — testable without network
 and without an API key.
+
+`web/` uses `cm-chessboard` (MIT), not chessground: chessground is GPL-3, and unlike
+Stockfish's subprocess isolation, a board-rendering library runs in the same JS
+runtime as the app's own frontend code — bundling it would carry the GPL into that
+bundle. `cm-chessboard` is vendored directly into `web/` (its MIT license allows
+that), which also keeps the board working fully offline, consistent with this app
+never needing anything but the narration calls to leave the machine.
 
 ## 4. Game start and turn flow
 
@@ -91,7 +98,7 @@ internal module ever handles two conventions at once.
 
 ### Turn flow
 
-1. The user drags a piece. Chessground only permits legal destinations — the
+1. The user drags a piece. cm-chessboard only permits legal destinations — the
    destination list arrives with the game state.
 2. `POST /move` with the move in UCI notation.
 3. `game.py` validates and applies it. An illegal move returns an error and the piece
@@ -218,7 +225,7 @@ low strength, but not so inattentive as to miss an obvious mate.
 
 ## 8. Interface
 
-- Chessground board: drag pieces, last-move highlight, legal destinations, premove.
+- cm-chessboard board: drag pieces, last-move highlight, legal destinations, premove.
 - Tutor panel and GOAT panel visually distinct — two voices, two places.
 - Game plan in its own persistent area.
 - Evaluation bar on the side, with a hide option.
