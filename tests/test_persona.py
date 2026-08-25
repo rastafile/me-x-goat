@@ -18,6 +18,10 @@ PAWN_CAN_CAPTURE_KNIGHT_FEN = "4k3/8/8/8/3n4/4P3/8/4K3 w - - 0 1"
 # e4e5 declines it.
 CENTRAL_TENSION_FEN = "4k3/8/8/3p4/4P3/8/8/4K3 w - - 0 1"
 
+# King e1, pawn e3, knight f3, vs King e8, pawn d4: both e3xd4 and Nxd4 land
+# on the tension square; Ke2 is the move that actually declines it.
+TENSION_SQUARE_ALSO_TAKEABLE_BY_KNIGHT_FEN = "4k3/8/8/8/3p4/4PN2/8/4K3 w - - 0 1"
+
 
 def test_short_mate_wins_outright_even_at_low_strength():
     candidates = [
@@ -221,6 +225,29 @@ def test_keep_tension_does_not_fire_when_no_central_pawn_tension_exists():
     contribution, tag = persona.keep_tension(PAWN_CAN_CAPTURE_KNIGHT_FEN, candidate, [candidate])
 
     assert (contribution, tag) == (0.0, None)
+
+
+def test_keep_tension_does_not_fire_when_a_different_piece_takes_the_tension_pawn():
+    # Regression: Nxd4 lands on the tension square, resolving it, even
+    # though it isn't the pawn-takes-pawn move itself -- it must not be
+    # treated as "declining" the capture.
+    candidate = Candidate(move="f3d4", score_cp=50, mate_in=None, pv=["f3d4"])
+
+    contribution, tag = persona.keep_tension(
+        TENSION_SQUARE_ALSO_TAKEABLE_BY_KNIGHT_FEN, candidate, [candidate]
+    )
+
+    assert (contribution, tag) == (0.0, None)
+
+
+def test_keep_tension_still_fires_for_an_unrelated_move_in_that_same_position():
+    candidate = Candidate(move="e1e2", score_cp=0, mate_in=None, pv=["e1e2"])
+
+    contribution, tag = persona.keep_tension(
+        TENSION_SQUARE_ALSO_TAKEABLE_BY_KNIGHT_FEN, candidate, [candidate]
+    )
+
+    assert (contribution, tag) == (1.5, "keep_tension")
 
 
 # --- avoid_chaos -------------------------------------------------------

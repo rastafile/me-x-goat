@@ -40,8 +40,8 @@ browser (cm-chessboard)
         |
    +----+----+----------+
    |         |          |
-game.py  engine.py   coach.py
-         (Stockfish)   (API)
+game.py  engine.py   coach.py -- narration.py
+         (Stockfish)   (API)      (no model)
              |
    +---------+---------+
    |                   |
@@ -55,7 +55,8 @@ persona.py         tutor.py
 | `engine.py` | Speaks UCI with Stockfish. Takes a FEN, returns the N best moves with evaluation (MultiPV), distinguishing centipawn scores from distance to mate. | Stockfish |
 | `persona.py` | Picks the GOAT's move from the candidates by applying style heuristics. Returns the move plus intent tags. | `engine` |
 | `tutor.py` | Analyzes the move the user just played. Classifies its quality and projects the likely continuation. | `engine` |
-| `coach.py` | Turns tags and numbers into natural language via the API. Two distinct voices: GOAT and tutor. | API |
+| `narration.py` | Builds the opponent's commentary from tags and an evaluation, deterministically, no model. The degraded-mode text `coach.py` falls back to (see §9). | `persona`, `engine` |
+| `coach.py` | Turns tags and numbers into natural language via the API. Two distinct voices: GOAT and tutor. Falls back to `narration.py` when the API is unavailable. | API, `narration` |
 | `game.py` | Game state, move validation, game-over detection, PGN export. | python-chess |
 | `server.py` | HTTP endpoints and turn orchestration. | all |
 | `web/` | Board, panels, themes, controls. | cm-chessboard |
@@ -247,7 +248,7 @@ contrast. The choice lives in `localStorage`. Adding a theme means adding a file
 |---|---|
 | Stockfish not found | Clear message at startup with the install command. The app does not start. |
 | Stockfish crashes mid-game | Restart the process and retry the analysis once. If it persists, warn and pause. |
-| API unavailable | Play continues. Text is assembled from tags and numbers, without the model. The game never stops for lack of narration. |
+| API unavailable | Play continues. `coach.py` falls back to `narration.py`'s text, assembled from tags and numbers without the model. The game never stops for lack of narration. |
 | Illegal move received | HTTP 400, the piece returns to its origin. |
 | Game over | Detected by python-chess: checkmate, stalemate, repetition, fifty-move rule, insufficient material. |
 

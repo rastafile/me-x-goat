@@ -31,6 +31,16 @@ Heuristic = Callable[[str, Candidate, list[Candidate]], tuple[float, str | None]
 _CENTRAL_SQUARES = {chess.D4, chess.D5, chess.E4, chess.E5}
 _CHAOS_SPREAD_CP = 150  # guess: top-5 lines disagreeing by more than this is "chaotic"
 
+# Single source of truth for each heuristic's weight -- also the table
+# narration.py ranks fired tags by, to lead with the strongest reason.
+WEIGHTS: dict[str, float] = {
+    "queen_trade": 3.0,
+    "toward_endgame": 2.5,
+    "improve_worst_piece": 1.5,
+    "keep_tension": 1.5,
+    "avoid_chaos": 1.0,
+}
+
 
 def trade_queens_when_ahead(board_fen: str, candidate: Candidate, candidates: list[Candidate]) -> tuple[float, str | None]:
     board = chess.Board(board_fen)
@@ -41,7 +51,7 @@ def trade_queens_when_ahead(board_fen: str, candidate: Candidate, candidates: li
     )
     mover_cp = candidate.score_cp if board.turn == chess.WHITE else -candidate.score_cp
     if trades_queens and 20 <= mover_cp <= 150:
-        return 3.0, "queen_trade"
+        return WEIGHTS["queen_trade"], "queen_trade"
     return 0.0, None
 
 
@@ -52,7 +62,7 @@ def toward_endgame(board_fen: str, candidate: Candidate, candidates: list[Candid
     # evaluation is already guaranteed: only within-margin candidates ever
     # reach a heuristic (see choose()).
     if board.is_capture(move):
-        return 2.5, "toward_endgame"
+        return WEIGHTS["toward_endgame"], "toward_endgame"
     return 0.0, None
 
 
@@ -64,22 +74,26 @@ def improve_worst_piece(board_fen: str, candidate: Candidate, candidates: list[C
         mobility[legal.from_square] = mobility.get(legal.from_square, 0) + 1
     worst = min(mobility.values())
     if mobility.get(move.from_square) == worst:
-        return 1.5, "improve_worst_piece"
+        return WEIGHTS["improve_worst_piece"], "improve_worst_piece"
     return 0.0, None
 
 
 def keep_tension(board_fen: str, candidate: Candidate, candidates: list[Candidate]) -> tuple[float, str | None]:
     board = chess.Board(board_fen)
     move = chess.Move.from_uci(candidate.move)
-    tension_captures = {
-        legal
+    # Squares holding a pawn our own pawn could capture. Whatever resolves
+    # that square -- the tension pawn itself, or any other piece capturing
+    # the same pawn (Nxd4, say) -- ends the tension, not just the exact
+    # pawn-takes-pawn move.
+    tension_squares = {
+        legal.to_square
         for legal in board.legal_moves
         if board.piece_type_at(legal.from_square) == chess.PAWN
         and board.piece_type_at(legal.to_square) == chess.PAWN
         and legal.to_square in _CENTRAL_SQUARES
     }
-    if tension_captures and move not in tension_captures:
-        return 1.5, "keep_tension"
+    if tension_squares and move.to_square not in tension_squares:
+        return WEIGHTS["keep_tension"], "keep_tension"
     return 0.0, None
 
 
@@ -89,7 +103,7 @@ def avoid_chaos(board_fen: str, candidate: Candidate, candidates: list[Candidate
     if len(scores) < 2:
         return 0.0, None
     if max(scores) - min(scores) > _CHAOS_SPREAD_CP:
-        return -1.0, "avoid_chaos"
+        return -WEIGHTS["avoid_chaos"], "avoid_chaos"
     return 0.0, None
 
 
