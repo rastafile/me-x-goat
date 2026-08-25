@@ -13,6 +13,7 @@ from typing import Literal
 
 import chess
 from fastapi import FastAPI, HTTPException
+from fastapi.responses import PlainTextResponse
 from pydantic import BaseModel, Field
 
 from src.engine import Analysis, Candidate, Engine, EngineUnavailable
@@ -108,6 +109,34 @@ def make_move(body: MoveRequest) -> GameStateResponse:
         goat_move, analysis = _play_goat_move(game, app.state.engine, app.state.style, app.state.strength)
 
     return _state_response(game, goat_move, analysis)
+
+
+@app.post("/take-back", response_model=GameStateResponse)
+def take_back() -> GameStateResponse:
+    game: Game | None = app.state.game
+    if game is None:
+        raise HTTPException(status_code=400, detail="no game in progress; call /new-game first")
+
+    # Normally two plies -- the user's move and the GOAT's reply -- except
+    # right after a Black game's opening, where only the GOAT's single
+    # opening move is on the stack yet (docs/week-1.md flagged this
+    # asymmetry without resolving it).
+    plies_to_pop = min(game.ply_count, 2)
+    if plies_to_pop == 0:
+        raise HTTPException(status_code=400, detail="nothing to take back")
+
+    for _ in range(plies_to_pop):
+        game.pop()
+
+    return _state_response(game, goat_move=None, analysis=None)
+
+
+@app.get("/pgn")
+def get_pgn() -> PlainTextResponse:
+    game: Game | None = app.state.game
+    if game is None:
+        raise HTTPException(status_code=400, detail="no game in progress; call /new-game first")
+    return PlainTextResponse(game.pgn())
 
 
 def _play_goat_move(

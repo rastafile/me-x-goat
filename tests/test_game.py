@@ -73,6 +73,18 @@ def test_black_user_starts_not_waiting_for_user():
     assert game.turn == "white"
 
 
+def test_ply_count_tracks_pushes_and_pops():
+    game = Game()
+    assert game.ply_count == 0
+
+    game.push("e2e4")
+    game.push("e7e5")
+    assert game.ply_count == 2
+
+    game.pop()
+    assert game.ply_count == 1
+
+
 def test_white_user_starts_waiting_for_user():
     game = Game(user_color="white")
 

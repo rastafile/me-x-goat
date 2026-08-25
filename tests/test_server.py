@@ -139,3 +139,59 @@ def test_checkmating_move_ends_the_game_with_no_goat_reply(client):
     assert body["is_over"] is True
     assert body["outcome"] == "checkmate"
     assert body["goat_move"] is None
+
+
+@pytest.mark.integration
+def test_take_back_after_a_normal_round_restores_the_position_before_it(client):
+    client.post("/new-game", json={"color": "white"})
+    client.post("/move", json={"uci": "e2e4"})
+
+    response = client.post("/take-back")
+
+    assert response.status_code == 200
+    assert response.json()["fen"] == START_FEN
+
+
+@pytest.mark.integration
+def test_take_back_right_after_a_black_opening_does_not_crash(client):
+    client.post("/new-game", json={"color": "black"})
+
+    response = client.post("/take-back")
+
+    assert response.status_code == 200
+    assert response.json()["fen"] == START_FEN
+
+
+@pytest.mark.integration
+def test_take_back_with_nothing_played_is_rejected(client):
+    client.post("/new-game", json={"color": "white"})
+
+    response = client.post("/take-back")
+
+    assert response.status_code == 400
+
+
+@pytest.mark.integration
+def test_take_back_with_no_game_in_progress_is_rejected(client):
+    response = client.post("/take-back")
+
+    assert response.status_code == 400
+
+
+@pytest.mark.integration
+def test_get_pgn_matches_the_games_own_pgn(client):
+    client.post("/new-game", json={"color": "white"})
+    client.post("/move", json={"uci": "e2e4"})
+
+    response = client.get("/pgn")
+
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("text/plain")
+    assert response.text == app.state.game.pgn()
+
+
+@pytest.mark.integration
+def test_get_pgn_with_no_game_in_progress_is_rejected(client):
+    response = client.get("/pgn")
+
+    assert response.status_code == 400
