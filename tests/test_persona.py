@@ -55,6 +55,21 @@ def test_mate_outside_short_range_is_not_forced():
     assert choice.tags == []
 
 
+def test_all_candidates_being_long_mates_falls_back_to_the_engines_top_move():
+    # A lost position: every try still runs into a forced mate against the
+    # mover, none short enough for step 1 to take outright. No cp candidate
+    # exists to run the heuristics on, so choose() must not crash.
+    candidates = [
+        Candidate(move="a1a2", score_cp=None, mate_in=-6, pv=["a1a2"]),
+        Candidate(move="b1b2", score_cp=None, mate_in=-4, pv=["b1b2"]),
+    ]
+
+    choice = choose(WHITE_TO_MOVE_FEN, candidates, strength=1400)
+
+    assert choice.move == "a1a2"
+    assert choice.tags == []
+
+
 def test_plain_candidate_set_picks_the_best_by_score_cp():
     candidates = [
         Candidate(move="e2e4", score_cp=50, mate_in=None, pv=["e2e4"]),

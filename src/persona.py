@@ -130,6 +130,13 @@ def choose(
     # missed unless it is short enough to win outright above.
     white_to_move = board_fen.split()[1] == "w"
     scored = [c for c in candidates if c.score_cp is not None]
+    if not scored:
+        # Every candidate is a mate line outside the short-mate cutoff --
+        # typically a lost position where every try still runs into a
+        # forced mate. No heuristic reasons about mate_in, so there is
+        # nothing to score; play the engine's own top-ranked candidate.
+        best = candidates[0]
+        return Choice(move=best.move, tags=[], reason_score=0.0)
     survivors = _within_margin(scored, white_to_move, strength)
 
     heuristics = _STYLES[style]
