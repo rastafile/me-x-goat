@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "me-x-goat-server",
+      "runtimeExecutable": ".venv/bin/uvicorn",
+      "runtimeArgs": ["src.server:app", "--port", "8000"],
+      "port": 8000
+    }
+  ]
+}

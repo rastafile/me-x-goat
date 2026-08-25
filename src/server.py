@@ -9,16 +9,20 @@ import os
 import sys
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from pathlib import Path
 from typing import Literal
 
 import chess
 from fastapi import FastAPI, HTTPException
-from fastapi.responses import PlainTextResponse
+from fastapi.responses import FileResponse, PlainTextResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from src.engine import Analysis, Candidate, Engine, EngineUnavailable
 from src.game import Game, IllegalMove
 from src.persona import choose
+
+_WEB_DIR = Path(__file__).resolve().parent.parent / "web"
 
 # Same shape and interpolation as persona._margin_cp's table; this is an
 # orchestration decision (how long to let the engine think), which belongs
@@ -77,6 +81,12 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
 
 app = FastAPI(lifespan=lifespan)
+app.mount("/static", StaticFiles(directory=_WEB_DIR), name="static")
+
+
+@app.get("/")
+def index() -> FileResponse:
+    return FileResponse(_WEB_DIR / "index.html")
 
 
 @app.post("/new-game", response_model=GameStateResponse)
