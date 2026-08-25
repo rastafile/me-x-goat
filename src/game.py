@@ -36,6 +36,10 @@ class Game:
     def waiting_for_user(self) -> bool:
         return self.turn == self._user_color
 
+    @property
+    def ply_count(self) -> int:
+        return len(self._board.move_stack)
+
     def legal_moves(self) -> list[str]:
         return [move.uci() for move in self._board.legal_moves]
 
