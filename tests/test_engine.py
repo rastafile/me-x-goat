@@ -1,8 +1,14 @@
 import subprocess
 
+import chess
 import pytest
 
 from src.engine import Analysis, Candidate, Engine, EngineUnavailable
+
+START_FEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
+AFTER_E4_FEN = "rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq - 0 1"
+WHITE_MATE_IN_1_FEN = "6k1/5ppp/8/8/8/8/5PPP/4R1K1 w - - 0 1"
+WHITE_MATED_IN_1_FEN = "K7/8/1k6/8/8/8/8/r6r w - - 0 1"
 
 
 class _FakeStdout:
@@ -159,3 +165,67 @@ def test_loss_cp_treats_a_missed_mate_as_a_large_loss():
 
     assert analysis.loss_cp(candidates[0]) == 0
     assert analysis.loss_cp(candidates[1]) > 90_000
+
+
+# Integration tests: require a real Stockfish binary on PATH. Deselect with
+# `pytest -m "not integration"` if it isn't installed.
+
+
+@pytest.fixture
+def real_engine():
+    try:
+        engine = Engine()
+    except EngineUnavailable:
+        pytest.skip("stockfish not installed")
+    yield engine
+    engine.close()
+
+
+@pytest.mark.integration
+def test_starting_position_returns_five_legal_candidates(real_engine):
+    analysis = real_engine.analyse(START_FEN, movetime_ms=200)
+
+    assert len(analysis.candidates) == 5
+    board = chess.Board(START_FEN)
+    for candidate in analysis.candidates:
+        assert chess.Move.from_uci(candidate.move) in board.legal_moves
+
+
+@pytest.mark.integration
+def test_mate_in_one_is_found_on_the_first_candidate(real_engine):
+    analysis = real_engine.analyse(WHITE_MATE_IN_1_FEN, movetime_ms=200)
+
+    assert analysis.candidates[0].mate_in == 1
+    assert analysis.candidates[0].score_cp is None
+
+
+@pytest.mark.integration
+def test_forced_mate_against_the_mover_is_negative(real_engine):
+    analysis = real_engine.analyse(WHITE_MATED_IN_1_FEN, movetime_ms=200)
+
+    assert analysis.candidates[0].mate_in == -1
+
+
+@pytest.mark.integration
+def test_perspective_is_consistent_between_white_and_black_to_move(real_engine):
+    # Both are roughly balanced positions for the side to move. Normalized
+    # to White's perspective, both should land near level rather than
+    # showing an implausible extreme for either -- the classic unflipped-sign
+    # bug would send one of these far outside a sane range.
+    white_analysis = real_engine.analyse(START_FEN, movetime_ms=200)
+    black_analysis = real_engine.analyse(AFTER_E4_FEN, movetime_ms=200)
+
+    assert -100 < white_analysis.candidates[0].score_cp < 100
+    assert -100 < black_analysis.candidates[0].score_cp < 100
+
+
+@pytest.mark.integration
+def test_close_terminates_the_real_process():
+    try:
+        engine = Engine()
+    except EngineUnavailable:
+        pytest.skip("stockfish not installed")
+
+    engine.close()
+
+    assert engine._process.poll() is not None
