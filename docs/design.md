@@ -170,7 +170,16 @@ losses are negative, regardless of color.
 Classification by evaluation loss in centipawns: excellent, good, inaccuracy,
 mistake, blunder. Thresholds are configurable.
 
-Each analysis delivers:
+### Asymmetric commentary
+
+The tutor is not equally verbose about every move. Good moves get one line, or
+silence. Inaccuracies and blunders get the detail below.
+
+Rationale: a chess teacher we consulted works primarily from students' mistakes — a
+win is just whoever made fewer of them. Spending the same words on a good move as on
+a blunder buries the moment the user actually needed to stop and look.
+
+Each analysis of an inaccuracy, mistake, or blunder delivers:
 
 - what the move won or gave away, in plain language;
 - what the stronger alternative would have been, and why — framed as learning, not
@@ -179,6 +188,19 @@ Each analysis delivers:
 - on a blunder, an offer to take the move back, always after the explanation.
 
 Taking moves back is freely allowed. This app has no rating and no competition.
+
+### Mistake count
+
+Every game tracks mistakes per side, by severity (inaccuracy, mistake, blunder). The
+running count is visible during play and is the centerpiece of the end-of-game
+summary, which reports both sides' counts and identifies where the game was decided.
+
+### Open question: how many mistakes is too many
+
+Not yet decided: how many mistakes a player can absorb in one game before feedback
+stops landing. This determines whether the tutor comments on every mistake or only
+the worst two or three. Pending input from a chess teacher — no number is chosen
+here.
 
 ## 7. Announced mate
 
