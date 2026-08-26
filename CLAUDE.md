@@ -50,7 +50,9 @@ One module, one responsibility. None of them import the server.
 - `game.py` — game state. Wraps `python-chess`. Nothing else touches the board.
 - `persona.py` — pure function. Picks the opponent's move from the candidates using
   style weights. No network, no state, no Stockfish.
-- `tutor.py` — pure function. Classifies the user's move. No network, no state.
+- `tutor.py` — pure function. Classifies a move (excellent through blunder) by
+  comparing an `Analysis` from before it and one from after it -- never touches
+  `persona.py`. No network, no state.
 - `narration.py` — pure function. Builds the opponent's commentary from tags and an
   evaluation, no model. This is the degraded-mode text `coach.py` falls back to when
   narration is unavailable, per the error-handling table in `docs/design.md`.
