@@ -3,7 +3,7 @@
 import subprocess
 from dataclasses import dataclass
 
-_MATE_SCORE = 100_000  # bridges mate distance onto the cp scale, for loss_cp only
+_MATE_SCORE = 100_000  # bridges mate distance onto the cp scale, for mover_score only
 
 
 class EngineUnavailable(Exception):
@@ -18,6 +18,20 @@ class Candidate:
     pv: list[str]
 
 
+def mover_score(candidate: Candidate, white_to_move: bool) -> int:
+    """A candidate's evaluation from the mover's point of view, with mate
+    bridged onto the cp scale so it can be compared/subtracted like a normal
+    score. Only meaningful for comparison (Analysis.loss_cp, tutor.py) --
+    never a real evaluation to show anyone (design.md's "mate is not cp")."""
+    if candidate.score_cp is not None:
+        white_value = candidate.score_cp
+    else:
+        assert candidate.mate_in is not None
+        sign = 1 if candidate.mate_in > 0 else -1
+        white_value = sign * (_MATE_SCORE - abs(candidate.mate_in))
+    return white_value if white_to_move else -white_value
+
+
 @dataclass(frozen=True)
 class Analysis:
     fen: str
@@ -28,16 +42,7 @@ class Analysis:
         """Centipawns worse than the best candidate, from the mover's point
         of view. Zero for the best candidate itself."""
         best = self.candidates[0]
-        return self._mover_score(best) - self._mover_score(candidate)
-
-    def _mover_score(self, candidate: Candidate) -> int:
-        if candidate.score_cp is not None:
-            white_value = candidate.score_cp
-        else:
-            assert candidate.mate_in is not None
-            sign = 1 if candidate.mate_in > 0 else -1
-            white_value = sign * (_MATE_SCORE - abs(candidate.mate_in))
-        return white_value if self.white_to_move else -white_value
+        return mover_score(best, self.white_to_move) - mover_score(candidate, self.white_to_move)
 
 
 class Engine:
