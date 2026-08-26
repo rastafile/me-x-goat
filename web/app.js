@@ -6,6 +6,9 @@ const START_FEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
 const statusEl = document.getElementById("status")
 const takeBackButton = document.getElementById("take-back-button")
 const exportPgnButton = document.getElementById("export-pgn-button")
+const strengthInput = document.getElementById("strength-input")
+const strengthValueEl = document.getElementById("strength-value")
+const styleInput = document.getElementById("style-input")
 
 // Server state mirrored client-side so the board's input handler can
 // validate drags without asking the server on every hover.
@@ -29,12 +32,19 @@ document.querySelectorAll("#new-game-panel button").forEach((button) => {
 })
 takeBackButton.addEventListener("click", takeBack)
 exportPgnButton.addEventListener("click", exportPgn)
+strengthInput.addEventListener("input", () => {
+    strengthValueEl.textContent = strengthInput.value
+})
 
 async function startNewGame(color) {
     const response = await fetch("/new-game", {
         method: "POST",
         headers: {"Content-Type": "application/json"},
-        body: JSON.stringify({color}),
+        body: JSON.stringify({
+            color,
+            strength: Number(strengthInput.value),
+            style: styleInput.value,
+        }),
     })
     const state = await response.json()
 

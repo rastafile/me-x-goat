@@ -10,7 +10,14 @@ body {
   margin: 1rem 0;
 }
 
-#new-game-panel,
+#new-game-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin: 0.5rem 0;
+}
+
+#new-game-panel > div,
 #controls {
   display: flex;
   gap: 0.5rem;
