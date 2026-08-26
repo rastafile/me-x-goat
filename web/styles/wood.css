@@ -1,0 +1,13 @@
+body.theme-wood {
+  --square-light: #ecdab9;
+  --square-dark: #c5a076;
+  --highlight: #f6f682;
+}
+
+body.theme-wood .cm-chessboard.default .board .square.white {
+  fill: var(--square-light);
+}
+
+body.theme-wood .cm-chessboard.default .board .square.black {
+  fill: var(--square-dark);
+}

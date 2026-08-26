@@ -1,0 +1,13 @@
+body.theme-classic-green {
+  --square-light: #eeeed2;
+  --square-dark: #769656;
+  --highlight: #f7ec74;
+}
+
+body.theme-classic-green .cm-chessboard.default .board .square.white {
+  fill: var(--square-light);
+}
+
+body.theme-classic-green .cm-chessboard.default .board .square.black {
+  fill: var(--square-dark);
+}

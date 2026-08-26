@@ -1,0 +1,13 @@
+body.theme-marble {
+  --square-light: #e5e2dc;
+  --square-dark: #8b8680;
+  --highlight: #d9c98a;
+}
+
+body.theme-marble .cm-chessboard.default .board .square.white {
+  fill: var(--square-light);
+}
+
+body.theme-marble .cm-chessboard.default .board .square.black {
+  fill: var(--square-dark);
+}

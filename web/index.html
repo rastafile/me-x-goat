@@ -7,6 +7,15 @@
 <link rel="stylesheet" href="/static/vendor/cm-chessboard/assets/chessboard.css">
 <link rel="stylesheet" href="/static/vendor/cm-chessboard/assets/extensions/promotion-dialog/promotion-dialog.css">
 <link rel="stylesheet" href="/static/styles/base.css">
+<!-- Every theme file loads unconditionally; body's theme-* class picks
+     which one actually paints anything, so no JS ever branches on the
+     current theme. Adding a theme means adding a file here and an
+     option below, nothing else. -->
+<link rel="stylesheet" href="/static/styles/wood.css">
+<link rel="stylesheet" href="/static/styles/classic-green.css">
+<link rel="stylesheet" href="/static/styles/blue.css">
+<link rel="stylesheet" href="/static/styles/marble.css">
+<link rel="stylesheet" href="/static/styles/high-contrast.css">
 </head>
 <body>
 <h1>Me X GOAT</h1>
@@ -28,6 +37,16 @@
     <select id="style-input">
       <option value="carlsen">Carlsen</option>
       <option value="raw">Raw engine</option>
+    </select>
+  </div>
+  <div>
+    <label for="theme-input">Theme:</label>
+    <select id="theme-input">
+      <option value="wood">Wood</option>
+      <option value="classic-green">Classic green</option>
+      <option value="blue">Blue</option>
+      <option value="marble">Marble</option>
+      <option value="high-contrast">High contrast</option>
     </select>
   </div>
 </div>
