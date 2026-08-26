@@ -1,5 +1,6 @@
-"""Sessions 1-2 of docs/week-2.md: /new-game, /move, and the evaluation
-perspective flip at the output boundary.
+"""Sessions 1-2 of docs/week-2.md (/new-game, /move, the evaluation
+perspective flip) plus session 2 of docs/week-3.md (tutor.assess wired into
+/move).
 
 Anything that spins up the app needs a real Stockfish (lifespan starts one),
 so those tests are marked integration individually. _evaluation_for_user is
@@ -116,6 +117,31 @@ def test_move_gets_a_goat_reply_and_advances_the_fen(client):
 
 
 @pytest.mark.integration
+def test_a_bad_user_move_gets_a_tutor_assessment_with_a_stronger_alternative(client):
+    client.post("/new-game", json={"color": "white", "strength": 800})
+
+    # Nh3 on move 1 is a well-known poor opening move.
+    response = client.post("/move", json={"uci": "g1h3"})
+
+    tutor = response.json()["tutor"]
+    assert tutor is not None
+    assert tutor["classification"] not in ("excellent", "good")
+    assert tutor["best_move"] is not None
+
+
+@pytest.mark.integration
+def test_a_good_user_move_gets_an_excellent_or_good_assessment(client):
+    client.post("/new-game", json={"color": "white", "strength": 800})
+
+    response = client.post("/move", json={"uci": "e2e4"})
+
+    tutor = response.json()["tutor"]
+    assert tutor is not None
+    assert tutor["classification"] in ("excellent", "good")
+    assert tutor["best_move"] is None
+
+
+@pytest.mark.integration
 def test_illegal_move_is_rejected_and_state_is_untouched(client):
     client.post("/new-game", json={"color": "white"})
 
@@ -139,6 +165,9 @@ def test_checkmating_move_ends_the_game_with_no_goat_reply(client):
     assert body["is_over"] is True
     assert body["outcome"] == "checkmate"
     assert body["goat_move"] is None
+    # No "after" analysis exists once the user's own move ends the game --
+    # there's nothing left to assess against.
+    assert body["tutor"] is None
 
 
 @pytest.mark.integration

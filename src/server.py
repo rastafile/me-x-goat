@@ -21,6 +21,7 @@ from pydantic import BaseModel, Field
 from src.engine import Analysis, Candidate, Engine, EngineUnavailable
 from src.game import Game, IllegalMove
 from src.persona import choose
+from src.tutor import Assessment, assess
 
 _WEB_DIR = Path(__file__).resolve().parent.parent / "web"
 
@@ -52,11 +53,20 @@ class GoatMove(BaseModel):
     tags: list[str]
 
 
+class AssessmentResponse(BaseModel):
+    classification: str
+    loss_cp: int
+    best_move: str | None
+    continuation: list[str]
+    offer_take_back: bool
+
+
 class GameStateResponse(BaseModel):
     fen: str
     user_color: Literal["white", "black"]
     legal_moves: list[str]
     goat_move: GoatMove | None
+    tutor: AssessmentResponse | None
     evaluation: int | None
     is_over: bool
     outcome: str | None
@@ -100,7 +110,7 @@ def new_game(body: NewGameRequest) -> GameStateResponse:
     if not game.waiting_for_user:
         goat_move, analysis = _play_goat_move(game, app.state.engine, body.style, body.strength)
 
-    return _state_response(game, goat_move, analysis)
+    return _state_response(game, goat_move, analysis, tutor=None)
 
 
 @app.post("/move", response_model=GameStateResponse)
@@ -109,16 +119,30 @@ def make_move(body: MoveRequest) -> GameStateResponse:
     if game is None:
         raise HTTPException(status_code=400, detail="no game in progress; call /new-game first")
 
+    # Capture the pre-move FEN and validate the move (cheap) before spending
+    # an analyse() call (not cheap) on it -- an illegal move should never
+    # reach the engine at all.
+    fen_before_move = game.fen
     try:
         game.push(body.uci)
     except IllegalMove as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
+    before = app.state.engine.analyse(fen_before_move, movetime_ms=_movetime_ms(app.state.strength))
+
     goat_move, analysis = None, None
     if not game.is_over():
         goat_move, analysis = _play_goat_move(game, app.state.engine, app.state.style, app.state.strength)
 
-    return _state_response(game, goat_move, analysis)
+    # analysis is the opponent's analysis of the position the user's move
+    # left behind -- exactly the "after" half tutor.assess needs, already
+    # paid for by _play_goat_move above. None only when the user's own move
+    # ended the game, and there's nothing left to analyse.
+    tutor_assessment = None
+    if analysis is not None:
+        tutor_assessment = assess(before, body.uci, analysis, game.user_color)
+
+    return _state_response(game, goat_move, analysis, tutor_assessment)
 
 
 @app.post("/take-back", response_model=GameStateResponse)
@@ -138,7 +162,7 @@ def take_back() -> GameStateResponse:
     for _ in range(plies_to_pop):
         game.pop()
 
-    return _state_response(game, goat_move=None, analysis=None)
+    return _state_response(game, goat_move=None, analysis=None, tutor=None)
 
 
 @app.get("/pgn")
@@ -161,17 +185,31 @@ def _play_goat_move(
 
 
 def _state_response(
-    game: Game, goat_move: GoatMove | None, analysis: Analysis | None
+    game: Game,
+    goat_move: GoatMove | None,
+    analysis: Analysis | None,
+    tutor: Assessment | None,
 ) -> GameStateResponse:
     top_candidate: Candidate | None = None
     if analysis is not None and analysis.candidates:
         top_candidate = analysis.candidates[0]
+
+    tutor_response = None
+    if tutor is not None:
+        tutor_response = AssessmentResponse(
+            classification=tutor.classification,
+            loss_cp=tutor.loss_cp,
+            best_move=tutor.best_move,
+            continuation=tutor.continuation,
+            offer_take_back=tutor.offer_take_back,
+        )
 
     return GameStateResponse(
         fen=game.fen,
         user_color=game.user_color,
         legal_moves=game.legal_moves(),
         goat_move=goat_move,
+        tutor=tutor_response,
         evaluation=_evaluation_for_user(top_candidate, game.user_color),
         is_over=game.is_over(),
         outcome=game.outcome(),
