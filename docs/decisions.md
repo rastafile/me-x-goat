@@ -119,3 +119,47 @@ because that is exactly the leak the tutor's independence exists to prevent
 — it would let the "independent" tutor quietly do the opponent's talking for
 it. If a future signature starts requiring that access, the design is wrong,
 not the signature.
+
+---
+
+## ADR 5: Style stays a move-time filter, not a repertoire, for v1
+
+### Context
+
+`persona.py` models the GOAT's style as a move-time preference: given the
+engine's candidates for the current position, hand-written heuristics score
+each one on things like trading queens while ahead, steering toward
+endgames, keeping central tension, and avoiding chaotic lines. Nothing about
+which openings the GOAT plays is modeled at all.
+
+### Expert input
+
+A chess teacher consulted for this project pushed back on that framing. Her
+position, verbatim in substance: she recognizes a player by knowing what
+they play — the opening repertoire, not traits visible in individual moves.
+Style lives in the repertoire, and it is not fixed: it is what a player
+studies, and it shifts over their lifetime.
+
+### Decision
+
+Keep the move-time filter for v1. It produces a recognizable character —
+this is what the five Carlsen heuristics in design.md §5 already do — which
+is enough for a learning tool whose job is teaching chess, not modeling a
+specific player's career.
+
+### Known limitation
+
+This is a caricature of style, not style itself. The heuristics make an
+opponent recognizably prefer trades, or avoid mess, move to move — they say
+nothing about which openings the GOAT reaches for, which is where the
+expert's account says a player's identity actually lives.
+
+### Rejected for now
+
+An opening book — steering the persona toward a specific, curated
+repertoire — is the strongest lever for real style, and would be the actual
+fix the expert's feedback points to. Out of scope for v1: design.md §11
+already deferred an opening book for unrelated infrastructure reasons; this
+ADR is the record that it also matters for style specifically, not only as
+a nice-to-have, and that its absence is a known limitation of what "style"
+means in this app, not a settled design choice.
