@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Me X GOAT</title>
+<link rel="stylesheet" href="/static/vendor/cm-chessboard/assets/chessboard.css">
+<link rel="stylesheet" href="/static/vendor/cm-chessboard/assets/extensions/promotion-dialog/promotion-dialog.css">
+<link rel="stylesheet" href="/static/styles/base.css">
+</head>
+<body>
+<h1>Me X GOAT</h1>
+
+<div id="new-game-panel">
+  <span>Play as:</span>
+  <button type="button" data-color="white">White</button>
+  <button type="button" data-color="black">Black</button>
+  <button type="button" data-color="random">Random</button>
+</div>
+
+<div id="board"></div>
+
+<div id="controls">
+  <button type="button" id="take-back-button" disabled>Take back</button>
+  <button type="button" id="export-pgn-button" disabled>Export PGN</button>
+</div>
+
+<div id="status"></div>
+
+<script type="module" src="/static/app.js"></script>
+</body>
+</html>

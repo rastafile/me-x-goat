@@ -1,0 +1,28 @@
+body {
+  font-family: system-ui, sans-serif;
+  max-width: 480px;
+  margin: 2rem auto;
+  padding: 0 1rem;
+}
+
+#board {
+  width: 100%;
+  margin: 1rem 0;
+}
+
+#new-game-panel,
+#controls {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  margin: 0.5rem 0;
+}
+
+#status {
+  white-space: pre-line;
+  min-height: 3em;
+}
+
+button:disabled {
+  opacity: 0.5;
+}
