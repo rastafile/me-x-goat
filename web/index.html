@@ -12,10 +12,24 @@
 <h1>Me X GOAT</h1>
 
 <div id="new-game-panel">
-  <span>Play as:</span>
-  <button type="button" data-color="white">White</button>
-  <button type="button" data-color="black">Black</button>
-  <button type="button" data-color="random">Random</button>
+  <div>
+    <span>Play as:</span>
+    <button type="button" data-color="white">White</button>
+    <button type="button" data-color="black">Black</button>
+    <button type="button" data-color="random">Random</button>
+  </div>
+  <div>
+    <label for="strength-input">Strength:</label>
+    <input type="range" id="strength-input" min="800" max="2800" step="100" value="1400">
+    <span id="strength-value">1400</span>
+  </div>
+  <div>
+    <label for="style-input">Style:</label>
+    <select id="style-input">
+      <option value="carlsen">Carlsen</option>
+      <option value="raw">Raw engine</option>
+    </select>
+  </div>
 </div>
 
 <div id="board"></div>
