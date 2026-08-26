@@ -35,7 +35,7 @@ Offline play is a requirement, not a fallback.
 Under construction, built in the open over four weeks.
 
 - [x] Week 1 — engine, game state, style filter (playable in the terminal)
-- [ ] Week 2 — HTTP server, draggable board, themes
+- [x] Week 2 — HTTP server, draggable board, themes
 - [ ] Week 3 — the tutor
 - [ ] Week 4 — narration layer, mate badge, tests, v1
 
@@ -81,10 +81,14 @@ stockfish
 ## Run
 
 ```bash
-python -m src.play_cli
+uvicorn src.server:app
 ```
 
-You pick your color at the start. If you take black, the opponent opens.
+Open `http://localhost:8000`, pick a color, strength, and style, and play on the
+board. If you take black, the opponent opens.
+
+A terminal-only mode still exists (`python -m src.play_cli`) from before the browser
+board existed; the web app above is the real way to play now.
 
 ## Configuration
 
