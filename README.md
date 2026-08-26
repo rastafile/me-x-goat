@@ -22,6 +22,8 @@ Three layers, and the separation between them is the whole design:
 | Style | Chooses among the engine's top moves to give the opponent a recognizable character | Plain Python rules |
 | Narration | Turns tags and numbers into readable explanations | A language model |
 
+The opponent has a recognizable style, not a faithful reproduction of any player's.
+
 **The language model never chooses a move.** It receives intent tags and evaluations,
 and writes prose. Every legal, tactical, and strategic decision comes from Stockfish.
 This is what keeps the app from confidently suggesting nonsense — language models are

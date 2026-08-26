@@ -139,6 +139,12 @@ choice, rather than being a rationalization invented by the model.
 Additional styles (Tal, Petrosian, raw engine) reuse the same structure with a
 different weight table. Adding a style means adding a table, not new code.
 
+This filter approximates character through move-time preference, not through
+opening choice. A chess teacher consulted for this project holds that style
+actually lives in the repertoire — what a player studies, which shifts over a
+career — not in traits visible move to move. Opening repertoire is the deeper
+determinant of style and is out of scope for v1; see `docs/decisions.md` ADR 5.
+
 ### Strength adjustment
 
 A single parameter (800 to 2800) controls two values:
@@ -301,9 +307,17 @@ app work offline.
   filter weights being stable and calibrated. Deferred to v2.
 - Maia (a neural network producing human-looking moves) as an alternative to the
   filtered engine. The `engine.py` interface already allows swapping it in later.
-- Opening book, saved game library, progress statistics.
+- Saved game library, progress statistics.
 - Analysis of external games imported by PGN.
 - Packaged application. v1 starts from the command line.
+
+### Known limitation: no opening book
+
+Not simply deferred infrastructure, the way the items above are — its absence is
+a known limitation of what "style" means in v1. A chess teacher consulted for
+this project holds that a player's identity lives in their repertoire, not in
+move-time preferences; the style filter (§5) approximates character without
+one. See `docs/decisions.md` ADR 5.
 
 ## 12. Build order
 
