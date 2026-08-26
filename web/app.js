@@ -9,6 +9,10 @@ const exportPgnButton = document.getElementById("export-pgn-button")
 const strengthInput = document.getElementById("strength-input")
 const strengthValueEl = document.getElementById("strength-value")
 const styleInput = document.getElementById("style-input")
+const themeInput = document.getElementById("theme-input")
+
+const DEFAULT_THEME = "wood"
+const THEME_STORAGE_KEY = "theme"
 
 // Server state mirrored client-side so the board's input handler can
 // validate drags without asking the server on every hover.
@@ -35,6 +39,30 @@ exportPgnButton.addEventListener("click", exportPgn)
 strengthInput.addEventListener("input", () => {
     strengthValueEl.textContent = strengthInput.value
 })
+themeInput.addEventListener("change", () => applyTheme(themeInput.value))
+
+applyTheme(loadStoredTheme())
+
+function loadStoredTheme() {
+    try {
+        return localStorage.getItem(THEME_STORAGE_KEY) || DEFAULT_THEME
+    } catch {
+        return DEFAULT_THEME
+    }
+}
+
+function applyTheme(name) {
+    const stale = Array.from(document.body.classList).filter((cls) => cls.startsWith("theme-"))
+    document.body.classList.remove(...stale)
+    document.body.classList.add(`theme-${name}`)
+    themeInput.value = name
+    try {
+        localStorage.setItem(THEME_STORAGE_KEY, name)
+    } catch {
+        // Private browsing / storage disabled: theme still applies for
+        // this page load, it just won't be remembered next time.
+    }
+}
 
 async function startNewGame(color) {
     const response = await fetch("/new-game", {

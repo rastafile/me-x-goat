@@ -1,0 +1,18 @@
+/* Dark squares are mid-grey, not black: cm-chessboard's standard piece
+   sprite renders black pieces as solid black fill *and* stroke, with no
+   separate outline color (unlike white pieces, whose black outline keeps
+   them visible against anything). A black dark square would make every
+   black piece disappear -- the opposite of what "high contrast" means. */
+body.theme-high-contrast {
+  --square-light: #ffffff;
+  --square-dark: #707070;
+  --highlight: #ff0000;
+}
+
+body.theme-high-contrast .cm-chessboard.default .board .square.white {
+  fill: var(--square-light);
+}
+
+body.theme-high-contrast .cm-chessboard.default .board .square.black {
+  fill: var(--square-dark);
+}
