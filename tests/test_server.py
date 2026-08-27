@@ -1,7 +1,8 @@
 """Sessions 1-2 of docs/week-2.md (/new-game, /move, the evaluation
 perspective flip) plus sessions 2-4 of docs/week-3.md (tutor.assess wired
 into /move, mistake counts both sides, the end-of-game summary) plus
-session 1 of docs/week-4.md (the requested language reaching app.state).
+sessions 1-2 of docs/week-4.md (the requested language reaching app.state;
+goat_move.commentary wired through coach.py).
 
 Anything that spins up the app needs a real Stockfish (lifespan starts one),
 so those tests are marked integration individually. _evaluation_for_user is
@@ -257,6 +258,20 @@ def test_move_gets_a_goat_reply_and_advances_the_fen(client):
     assert body["goat_move"] is not None
     # Two plies happened: the user's e2e4 and the GOAT's reply.
     assert body["fen"].split()[1] == "w"
+
+
+@pytest.mark.integration
+def test_goat_move_includes_narrated_commentary(client):
+    # No ANTHROPIC_API_KEY in the test environment -- this exercises
+    # coach.py's degraded path (narration.py's deterministic text) through
+    # the real /new-game -> /move wiring, in the requested language.
+    client.post("/new-game", json={"color": "white", "language": "pt-BR"})
+
+    response = client.post("/move", json={"uci": "e2e4"})
+
+    commentary = response.json()["goat_move"]["commentary"]
+    assert isinstance(commentary, str)
+    assert commentary != ""
 
 
 @pytest.mark.integration

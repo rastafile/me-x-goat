@@ -207,3 +207,40 @@ client sends the server as the requested narration language, with
 client attached (e.g. `play_cli.py`). That wiring doesn't exist yet and is
 deferred to whichever week actually builds `coach.py` — not designed here,
 per CLAUDE.md's scope rule against building ahead of the current plan.
+
+**Resolved** in docs/week-4.md sessions 1-2, exactly this way:
+`NewGameRequest.language` carries the page's choice to `app.state.language`;
+`play_cli.py` reads `OUTPUT_LANGUAGE` directly, having no page of its own.
+
+---
+
+## ADR 7: `coach.py` enriches `narration.py`'s text, not `persona.py`'s raw tags
+
+### Context
+
+design.md §5 says `persona.py`'s tags "travel with the move all the way to
+`coach.py`, which uses them as raw material for the text," so the
+explanation matches the actual reason for the choice rather than a
+rationalization invented by the model. Read literally, that would have
+`coach.py`'s prompt hand the model raw tag identifiers and an evaluation
+number, and ask it to write the sentence from scratch.
+
+### Decision
+
+`narrate_goat_move` computes `narration.py`'s deterministic text first (the
+same text degraded mode would show) and asks the model only to *rephrase*
+it more naturally, explicitly forbidden from adding any chess claim,
+square, or move name not already in that note. The fallback path — no API
+key, or any failure — returns that exact same text. The enriched and
+degraded paths are therefore guaranteed to agree on substance; the model
+only ever changes register, never content.
+
+### Rejected alternative
+
+Prompting directly from `persona.py`'s raw tags and evaluation. Rejected
+because it reopens the exact risk design.md's "tags as raw material" rule
+exists to close: a model asked to "explain why" from raw signals, in either
+language, can still produce phrasing that reads as a *new* reason rather
+than a restatement of an existing one. Wrapping `narration.py`'s own output
+removes that degree of freedom — the same sentence a network outage would
+show is the only material the model is allowed to riff on.

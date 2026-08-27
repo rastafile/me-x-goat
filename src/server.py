@@ -18,6 +18,7 @@ from fastapi.responses import FileResponse, PlainTextResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
+from src.coach import narrate_goat_move
 from src.engine import Analysis, Candidate, Engine, EngineUnavailable
 from src.game import Game, IllegalMove
 from src.narration import DEFAULT_LANGUAGE, LANGUAGES
@@ -65,6 +66,7 @@ class GoatMove(BaseModel):
     uci: str
     san: str
     tags: list[str]
+    commentary: str
 
 
 class AssessmentResponse(BaseModel):
@@ -143,7 +145,9 @@ def new_game(body: NewGameRequest) -> GameStateResponse:
 
     goat_move, analysis = None, None
     if not game.waiting_for_user:
-        goat_move, analysis = _play_goat_move(game, app.state.engine, body.style, body.strength)
+        goat_move, analysis = _play_goat_move(
+            game, app.state.engine, body.style, body.strength, app.state.language
+        )
         app.state.assessment_history.append(None)  # opening move, not assessed
 
     return _state_response(
@@ -176,7 +180,9 @@ def make_move(body: MoveRequest) -> GameStateResponse:
 
     goat_move, analysis = None, None
     if not game.is_over():
-        goat_move, analysis = _play_goat_move(game, app.state.engine, app.state.style, app.state.strength)
+        goat_move, analysis = _play_goat_move(
+            game, app.state.engine, app.state.style, app.state.strength, app.state.language
+        )
 
     # analysis is the opponent's analysis of the position the user's move
     # left behind -- exactly the "after" half tutor.assess needs, already
@@ -250,14 +256,17 @@ def get_pgn() -> PlainTextResponse:
 
 
 def _play_goat_move(
-    game: Game, engine: Engine, style: str, strength: int
+    game: Game, engine: Engine, style: str, strength: int, language: str
 ) -> tuple[GoatMove, Analysis]:
     analysis = engine.analyse(game.fen, movetime_ms=_movetime_ms(strength))
     board_before = chess.Board(game.fen)
     result = choose(game.fen, analysis.candidates, style=style, strength=strength)
     game.push(result.move)
     san = board_before.san(chess.Move.from_uci(result.move))
-    return GoatMove(uci=result.move, san=san, tags=result.tags), analysis
+    # narrate_goat_move expects `game` to already reflect the position after
+    # `result.move` -- true here, since it's called right after the push.
+    commentary = narrate_goat_move(analysis, result, game, language)
+    return GoatMove(uci=result.move, san=san, tags=result.tags, commentary=commentary), analysis
 
 
 def _track_assessment(
