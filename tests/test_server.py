@@ -1,6 +1,7 @@
 """Sessions 1-2 of docs/week-2.md (/new-game, /move, the evaluation
 perspective flip) plus sessions 2-4 of docs/week-3.md (tutor.assess wired
-into /move, mistake counts both sides, the end-of-game summary).
+into /move, mistake counts both sides, the end-of-game summary) plus
+session 1 of docs/week-4.md (the requested language reaching app.state).
 
 Anything that spins up the app needs a real Stockfish (lifespan starts one),
 so those tests are marked integration individually. _evaluation_for_user is
@@ -12,6 +13,7 @@ from fastapi.testclient import TestClient
 
 from src.engine import Candidate, EngineUnavailable
 from src.game import Game
+from src.narration import DEFAULT_LANGUAGE
 from src.server import _evaluation_for_user, _fresh_mistake_counts, _summary, _track_assessment, app
 from src.tutor import Assessment
 
@@ -220,6 +222,20 @@ def test_new_game_as_black_opens_with_the_goat(client):
     assert body["goat_move"] is not None
     assert body["goat_move"]["uci"]
     assert body["goat_move"]["san"]
+
+
+@pytest.mark.integration
+def test_new_game_stores_the_requested_language(client):
+    client.post("/new-game", json={"color": "white", "language": "pt-BR"})
+
+    assert app.state.language == "pt-BR"
+
+
+@pytest.mark.integration
+def test_new_game_falls_back_to_the_default_language_for_an_unknown_value(client):
+    client.post("/new-game", json={"color": "white", "language": "fr-FR"})
+
+    assert app.state.language == DEFAULT_LANGUAGE
 
 
 @pytest.mark.integration

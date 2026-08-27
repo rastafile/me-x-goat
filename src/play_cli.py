@@ -10,7 +10,7 @@ import chess
 
 from src.engine import Engine, EngineUnavailable
 from src.game import Game, IllegalMove
-from src.narration import describe_move
+from src.narration import DEFAULT_LANGUAGE, describe_move
 from src.persona import choose
 
 _STYLE = "carlsen"
@@ -107,7 +107,11 @@ def _play_goat_move(game: Game, engine: Engine, debug: bool = False) -> None:
     san = board_before.san(chess.Move.from_uci(choice.move))
 
     print(f"GOAT plays {san}")
-    print(describe_move(analysis, choice, game))
+    # No page, no switch here (docs/decisions.md ADR 6's "known limitation"
+    # resolves exactly this way for the terminal mode): OUTPUT_LANGUAGE is
+    # the server-less default.
+    language = os.environ.get("OUTPUT_LANGUAGE", DEFAULT_LANGUAGE)
+    print(describe_move(analysis, choice, game, language))
     if debug:
         print(f"  [tags: {', '.join(choice.tags) or 'none'}]")
 

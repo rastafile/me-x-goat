@@ -1,10 +1,13 @@
 from src.engine import Analysis, Candidate
 from src.game import Game
-from src.narration import describe_move
+from src.narration import DEFAULT_LANGUAGE, LANGUAGES, describe_move
 from src.persona import Choice
 
 WHITE_TO_MOVE_FEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
 WHITE_MATE_IN_1_FEN = "6k1/5ppp/8/8/8/8/5PPP/4R1K1 w - - 0 1"
+# Fool's mate's final position -- an already-delivered checkmate, so
+# Game(fen=...).is_over() is True with no moves needed to get there.
+CHECKMATED_FEN = "rnb1kbnr/pppp1ppp/8/4p3/6Pq/5P2/PPPPP2P/RNBQKBNR w KQkq - 1 3"
 
 
 def _analysis(candidates: list[Candidate], fen: str = WHITE_TO_MOVE_FEN) -> Analysis:
@@ -17,9 +20,8 @@ def test_leads_with_the_highest_weight_tag():
     choice = Choice(move="d4d5", tags=["improve_worst_piece", "queen_trade"], reason_score=4.5)
     game = Game(user_color="white")
 
-    text = describe_move(analysis, choice, game)
-
-    assert text.startswith("I'm trading queens while I'm ahead.")
+    assert describe_move(analysis, choice, game, "en-US").startswith("I'm trading queens while I'm ahead.")
+    assert describe_move(analysis, choice, game, "pt-BR").startswith("Estou trocando as damas enquanto estou à frente.")
 
 
 def test_forced_mate_always_leads_over_style_tags():
@@ -30,9 +32,8 @@ def test_forced_mate_always_leads_over_style_tags():
     choice = Choice(move="d4d5", tags=["queen_trade", "forced_mate"], reason_score=float("inf"))
     game = Game(user_color="white")
 
-    text = describe_move(analysis, choice, game)
-
-    assert text.startswith("I found a forced mate.")
+    assert describe_move(analysis, choice, game, "en-US").startswith("I found a forced mate.")
+    assert describe_move(analysis, choice, game, "pt-BR").startswith("Encontrei um mate forçado.")
 
 
 def test_no_tags_falls_back_to_a_generic_line():
@@ -41,9 +42,8 @@ def test_no_tags_falls_back_to_a_generic_line():
     choice = Choice(move="e2e4", tags=[], reason_score=0.0)
     game = Game(user_color="white")
 
-    text = describe_move(analysis, choice, game)
-
-    assert text == "I'm just playing the strongest move I see."
+    assert describe_move(analysis, choice, game, "en-US") == "I'm just playing the strongest move I see."
+    assert describe_move(analysis, choice, game, "pt-BR") == "Estou só jogando o lance mais forte que vejo."
 
 
 def test_tags_never_appear_literally_in_the_output():
@@ -53,10 +53,10 @@ def test_tags_never_appear_literally_in_the_output():
     choice = Choice(move="d4d5", tags=all_tags, reason_score=8.5)
     game = Game(user_color="white")
 
-    text = describe_move(analysis, choice, game)
-
-    for tag in all_tags:
-        assert tag not in text
+    for language in LANGUAGES:
+        text = describe_move(analysis, choice, game, language)
+        for tag in all_tags:
+            assert tag not in text
 
 
 def test_evaluation_line_appears_when_the_user_is_meaningfully_ahead():
@@ -67,11 +67,12 @@ def test_evaluation_line_appears_when_the_user_is_meaningfully_ahead():
     choice = Choice(move="e2e4", tags=[], reason_score=0.0)
     game = Game(user_color="white")
 
-    text = describe_move(analysis, choice, game)
-    lines = text.splitlines()
+    en = describe_move(analysis, choice, game, "en-US").splitlines()
+    pt = describe_move(analysis, choice, game, "pt-BR").splitlines()
 
-    assert len(lines) == 2
-    assert lines[1] == "You're doing well here, I have to admit."
+    assert len(en) == len(pt) == 2
+    assert en[1] == "You're doing well here, I have to admit."
+    assert pt[1] == "Você está bem aqui, tenho que admitir."
 
 
 def test_evaluation_line_flips_for_a_black_user():
@@ -83,9 +84,8 @@ def test_evaluation_line_flips_for_a_black_user():
     choice = Choice(move="e2e4", tags=[], reason_score=0.0)
     game = Game(user_color="black")
 
-    text = describe_move(analysis, choice, game)
-
-    assert text.splitlines()[1] == "I like where I stand right now."
+    assert describe_move(analysis, choice, game, "en-US").splitlines()[1] == "I like where I stand right now."
+    assert describe_move(analysis, choice, game, "pt-BR").splitlines()[1] == "Gosto de como estou agora."
 
 
 def test_evaluation_line_omitted_when_roughly_balanced():
@@ -94,9 +94,7 @@ def test_evaluation_line_omitted_when_roughly_balanced():
     choice = Choice(move="e2e4", tags=[], reason_score=0.0)
     game = Game(user_color="white")
 
-    text = describe_move(analysis, choice, game)
-
-    assert len(text.splitlines()) == 1
+    assert len(describe_move(analysis, choice, game, "en-US").splitlines()) == 1
 
 
 def test_evaluation_line_omitted_for_a_mate_typed_candidate():
@@ -107,21 +105,17 @@ def test_evaluation_line_omitted_for_a_mate_typed_candidate():
     # eval-line behavior from the outcome-line behavior tested below.
     game = Game(user_color="black", fen=WHITE_MATE_IN_1_FEN)
 
-    text = describe_move(analysis, choice, game)
-
-    assert text == "I found a forced mate."
+    assert describe_move(analysis, choice, game, "en-US") == "I found a forced mate."
 
 
 def test_outcome_line_replaces_the_evaluation_line_when_the_game_is_over():
-    candidate = Candidate(move="e1e8", score_cp=None, mate_in=1, pv=["e1e8"])
-    analysis = _analysis([candidate], fen=WHITE_MATE_IN_1_FEN)
-    choice = Choice(move="e1e8", tags=["forced_mate"], reason_score=float("inf"))
-    game = Game(user_color="black", fen=WHITE_MATE_IN_1_FEN)
-    game.push("e1e8")
+    candidate = Candidate(move="d8h4", score_cp=None, mate_in=None, pv=["d8h4"])
+    analysis = _analysis([candidate], fen=CHECKMATED_FEN)
+    choice = Choice(move="d8h4", tags=[], reason_score=0.0)
+    game = Game(user_color="white", fen=CHECKMATED_FEN)
 
-    text = describe_move(analysis, choice, game)
-
-    assert text == "I found a forced mate.\nCheckmate."
+    assert describe_move(analysis, choice, game, "en-US") == "I'm just playing the strongest move I see.\nCheckmate."
+    assert describe_move(analysis, choice, game, "pt-BR") == "Estou só jogando o lance mais forte que vejo.\nXeque-mate."
 
 
 def test_at_most_two_lines():
@@ -134,9 +128,8 @@ def test_at_most_two_lines():
     )
     game = Game(user_color="white")
 
-    text = describe_move(analysis, choice, game)
-
-    assert len(text.splitlines()) <= 2
+    for language in LANGUAGES:
+        assert len(describe_move(analysis, choice, game, language).splitlines()) <= 2
 
 
 def test_deterministic_same_input_same_output():
@@ -145,7 +138,20 @@ def test_deterministic_same_input_same_output():
     choice = Choice(move="d4d5", tags=["toward_endgame"], reason_score=2.5)
     game = Game(user_color="black")
 
-    first = describe_move(analysis, choice, game)
-    second = describe_move(analysis, choice, game)
+    first = describe_move(analysis, choice, game, "en-US")
+    second = describe_move(analysis, choice, game, "en-US")
 
     assert first == second
+
+
+def test_unknown_language_falls_back_to_the_default():
+    candidate = Candidate(move="e2e4", score_cp=10, mate_in=None, pv=["e2e4"])
+    analysis = _analysis([candidate])
+    choice = Choice(move="e2e4", tags=[], reason_score=0.0)
+    game = Game(user_color="white")
+
+    assert describe_move(analysis, choice, game, "fr-FR") == describe_move(analysis, choice, game, DEFAULT_LANGUAGE)
+
+
+def test_languages_constant_includes_the_default():
+    assert DEFAULT_LANGUAGE in LANGUAGES
