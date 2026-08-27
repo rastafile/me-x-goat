@@ -33,7 +33,6 @@ body {
 /* Visually distinct from #status -- the tutor is a second voice, not the
    GOAT's, per design.md §8. */
 #tutor-panel {
-  white-space: pre-line;
   min-height: 1em;
   margin: 0.5rem 0;
   padding: 0.5rem 0.75rem;
@@ -43,6 +42,11 @@ body {
 
 #tutor-panel:empty {
   display: none;
+}
+
+#tutor-panel p {
+  margin: 0;
+  white-space: pre-line;
 }
 
 #tutor-panel button {

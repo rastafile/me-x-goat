@@ -254,7 +254,12 @@ function renderTutor(tutor) {
     }
     // Plain UCI for now, not narrated text -- narration is week 4
     // (docs/week-3.md session 5 contract).
-    tutorPanelEl.textContent = lines.join("\n")
+    // A real element, not a bare text node: a node appended straight after
+    // plain text doesn't reliably start its own line (the take-back button
+    // was rendering squeezed onto the text's last line instead of below it).
+    const text = document.createElement("p")
+    text.textContent = lines.join("\n")
+    tutorPanelEl.appendChild(text)
 
     // The take-back offer is appended last, after the rest of the analysis
     // text is already in place, per design.md §6's ordering rule ("always
