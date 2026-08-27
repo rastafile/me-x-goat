@@ -58,7 +58,18 @@
       <option value="pt-BR">Português (Brasil)</option>
     </select>
   </div>
+  <div>
+    <label for="mate-badge-toggle">
+      <input type="checkbox" id="mate-badge-toggle" checked>
+      <span data-i18n="mateBadgeToggle">Mate badge</span>
+    </label>
+  </div>
 </div>
+
+<!-- design.md §7: announces mate's existence and distance only, never the
+     piece, square, or move. Empty (and hidden, see base.css) whenever
+     there's nothing to announce or the switch above is off. -->
+<div id="mate-badge"></div>
 
 <div id="board"></div>
 

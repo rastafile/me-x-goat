@@ -10,6 +10,23 @@ body {
   margin: 1rem 0;
 }
 
+/* design.md §7: "a discreet badge" -- small, muted, not competing with the
+   tutor/GOAT panels below the board. */
+#mate-badge {
+  font-size: 0.85em;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  padding: 0.25rem 0.5rem;
+  border-radius: 0.25rem;
+  background: rgba(180, 140, 20, 0.15);
+  color: #8a6400;
+  display: inline-block;
+}
+
+#mate-badge:empty {
+  display: none;
+}
+
 #new-game-panel {
   display: flex;
   flex-direction: column;
