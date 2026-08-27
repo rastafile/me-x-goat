@@ -70,6 +70,13 @@ class AssessmentResponse(BaseModel):
     offer_take_back: bool
 
 
+class SummaryResponse(BaseModel):
+    mistake_counts: dict[str, dict[str, int]]
+    decided_at_ply: int
+    decided_by: Literal["white", "black"]
+    loss_cp: int
+
+
 class GameStateResponse(BaseModel):
     fen: str
     user_color: Literal["white", "black"]
@@ -77,6 +84,7 @@ class GameStateResponse(BaseModel):
     goat_move: GoatMove | None
     tutor: AssessmentResponse | None
     mistake_counts: dict[str, dict[str, int]]
+    summary: SummaryResponse | None
     evaluation: int | None
     is_over: bool
     outcome: str | None
@@ -131,7 +139,14 @@ def new_game(body: NewGameRequest) -> GameStateResponse:
         goat_move, analysis = _play_goat_move(game, app.state.engine, body.style, body.strength)
         app.state.assessment_history.append(None)  # opening move, not assessed
 
-    return _state_response(game, goat_move, analysis, tutor=None, mistake_counts=app.state.mistake_counts)
+    return _state_response(
+        game,
+        goat_move,
+        analysis,
+        tutor=None,
+        mistake_counts=app.state.mistake_counts,
+        assessment_history=app.state.assessment_history,
+    )
 
 
 @app.post("/move", response_model=GameStateResponse)
@@ -179,7 +194,12 @@ def make_move(body: MoveRequest) -> GameStateResponse:
         _track_assessment(app.state.assessment_history, app.state.mistake_counts, goat_color, goat_assessment)
 
     return _state_response(
-        game, goat_move, analysis, tutor_assessment, mistake_counts=app.state.mistake_counts
+        game,
+        goat_move,
+        analysis,
+        tutor_assessment,
+        mistake_counts=app.state.mistake_counts,
+        assessment_history=app.state.assessment_history,
     )
 
 
@@ -205,7 +225,12 @@ def take_back() -> GameStateResponse:
             _adjust_mistake_count(app.state.mistake_counts, color, assessment.classification, -1)
 
     return _state_response(
-        game, goat_move=None, analysis=None, tutor=None, mistake_counts=app.state.mistake_counts
+        game,
+        goat_move=None,
+        analysis=None,
+        tutor=None,
+        mistake_counts=app.state.mistake_counts,
+        assessment_history=app.state.assessment_history,
     )
 
 
@@ -252,12 +277,49 @@ def _adjust_mistake_count(
         mistake_counts[color][classification] += delta
 
 
+def _summary(
+    game: Game,
+    assessment_history: list[tuple[str, Assessment] | None],
+    mistake_counts: dict[str, dict[str, int]],
+) -> SummaryResponse | None:
+    """Recomputed from assessment_history on demand rather than tracked
+    incrementally: take-back already pops that history in lockstep with
+    game.pop(), so recomputing "the worst ply so far" from whatever is
+    actually left there is correct for free, including across repeated
+    take-backs -- no separate undo logic needed for this."""
+    if not game.is_over():
+        return None
+
+    worst: tuple[int, str, Assessment] | None = None
+    for ply, entry in enumerate(assessment_history, start=1):
+        if entry is None:
+            continue
+        color, assessment = entry
+        if worst is None or assessment.loss_cp > worst[2].loss_cp:
+            worst = (ply, color, assessment)
+
+    if worst is None:
+        # Every ply this game was untracked (e.g. it ended before any move
+        # ever got an "after" analysis) -- nothing to name as the turning
+        # point.
+        return None
+
+    ply, color, assessment = worst
+    return SummaryResponse(
+        mistake_counts=mistake_counts,
+        decided_at_ply=ply,
+        decided_by=color,
+        loss_cp=assessment.loss_cp,
+    )
+
+
 def _state_response(
     game: Game,
     goat_move: GoatMove | None,
     analysis: Analysis | None,
     tutor: Assessment | None,
     mistake_counts: dict[str, dict[str, int]],
+    assessment_history: list[tuple[str, Assessment] | None],
 ) -> GameStateResponse:
     top_candidate: Candidate | None = None
     if analysis is not None and analysis.candidates:
@@ -280,6 +342,7 @@ def _state_response(
         goat_move=goat_move,
         tutor=tutor_response,
         mistake_counts=mistake_counts,
+        summary=_summary(game, assessment_history, mistake_counts),
         evaluation=_evaluation_for_user(top_candidate, game.user_color),
         is_over=game.is_over(),
         outcome=game.outcome(),

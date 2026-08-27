@@ -1,6 +1,6 @@
 """Sessions 1-2 of docs/week-2.md (/new-game, /move, the evaluation
-perspective flip) plus session 2 of docs/week-3.md (tutor.assess wired into
-/move).
+perspective flip) plus sessions 2-4 of docs/week-3.md (tutor.assess wired
+into /move, mistake counts both sides, the end-of-game summary).
 
 Anything that spins up the app needs a real Stockfish (lifespan starts one),
 so those tests are marked integration individually. _evaluation_for_user is
@@ -12,11 +12,14 @@ from fastapi.testclient import TestClient
 
 from src.engine import Candidate, EngineUnavailable
 from src.game import Game
-from src.server import _evaluation_for_user, _fresh_mistake_counts, _track_assessment, app
+from src.server import _evaluation_for_user, _fresh_mistake_counts, _summary, _track_assessment, app
 from src.tutor import Assessment
 
 START_FEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
 WHITE_MATE_IN_1_FEN = "6k1/5ppp/8/8/8/8/5PPP/4R1K1 w - - 0 1"
+# Fool's mate's final position -- an already-delivered checkmate, so
+# Game(fen=...).is_over() is True with zero moves needed to get there.
+CHECKMATED_FEN = "rnb1kbnr/pppp1ppp/8/4p3/6Pq/5P2/PPPPP2P/RNBQKBNR w KQkq - 1 3"
 # A whole extra queen resolves to a forced mate at shallow search depth
 # (evaluation would be null, correctly, but that's not what these two test) --
 # a rook is enough of an edge to show up as a plain cp score instead.
@@ -88,6 +91,87 @@ def test_track_assessment_does_not_count_excellent_or_good():
 
     assert counts == _fresh_mistake_counts()
     assert history == [("white", good)]
+
+
+def test_summary_is_none_while_the_game_is_still_in_progress():
+    game = Game(fen=START_FEN)
+    counts = _fresh_mistake_counts()
+    blunder = Assessment(
+        classification="blunder", loss_cp=500, best_move="e2e4", continuation=["e2e4"], offer_take_back=True
+    )
+
+    assert _summary(game, [("white", blunder)], counts) is None
+
+
+def test_summary_names_the_ply_and_color_of_the_worst_move():
+    # A short scripted "game" (history is hand-built, not actually played) --
+    # only game.is_over() needs to be real, so a real checkmate FEN stands in.
+    game = Game(fen=CHECKMATED_FEN)
+    counts = _fresh_mistake_counts()
+    history = [
+        ("white", Assessment(classification="good", loss_cp=15, best_move=None, continuation=[], offer_take_back=False)),
+        ("black", Assessment(classification="excellent", loss_cp=0, best_move=None, continuation=[], offer_take_back=False)),
+        (
+            "white",
+            Assessment(
+                classification="blunder", loss_cp=650, best_move="e2e4", continuation=["e2e4"], offer_take_back=True
+            ),
+        ),
+        ("black", Assessment(classification="inaccuracy", loss_cp=60, best_move=None, continuation=[], offer_take_back=False)),
+    ]
+
+    summary = _summary(game, history, counts)
+
+    assert summary is not None
+    assert summary.decided_at_ply == 3
+    assert summary.decided_by == "white"
+    assert summary.loss_cp == 650
+    assert summary.mistake_counts == counts
+
+
+def test_summary_is_present_even_in_a_clean_game_with_no_move_above_good():
+    # There is always a worst move, even when nothing was ever a mistake --
+    # the summary should still name whichever small loss was the largest.
+    game = Game(fen=CHECKMATED_FEN)
+    counts = _fresh_mistake_counts()
+    history = [
+        ("white", Assessment(classification="excellent", loss_cp=0, best_move=None, continuation=[], offer_take_back=False)),
+        ("black", Assessment(classification="good", loss_cp=25, best_move=None, continuation=[], offer_take_back=False)),
+        ("white", Assessment(classification="excellent", loss_cp=5, best_move=None, continuation=[], offer_take_back=False)),
+    ]
+
+    summary = _summary(game, history, counts)
+
+    assert summary is not None
+    assert summary.decided_at_ply == 2
+    assert summary.decided_by == "black"
+    assert summary.loss_cp == 25
+
+
+def test_summary_skips_untracked_plies_when_finding_the_worst_move():
+    # None entries stand for untracked plies (the black-opening move, or a
+    # move that ended the game with no "after" position) and must not crash
+    # or be mistaken for a zero-loss move.
+    game = Game(fen=CHECKMATED_FEN)
+    counts = _fresh_mistake_counts()
+    history = [
+        None,
+        ("black", Assessment(classification="mistake", loss_cp=120, best_move="e7e5", continuation=[], offer_take_back=True)),
+    ]
+
+    summary = _summary(game, history, counts)
+
+    assert summary is not None
+    assert summary.decided_at_ply == 2
+    assert summary.decided_by == "black"
+    assert summary.loss_cp == 120
+
+
+def test_summary_is_none_when_every_ply_is_untracked():
+    game = Game(fen=CHECKMATED_FEN)
+    counts = _fresh_mistake_counts()
+
+    assert _summary(game, [None, None], counts) is None
 
 
 @pytest.mark.integration
@@ -255,6 +339,40 @@ def test_checkmating_move_ends_the_game_with_no_goat_reply(client):
     # No "after" analysis exists once the user's own move ends the game --
     # there's nothing left to assess against.
     assert body["tutor"] is None
+    # This game's only ply is the untracked mating move itself, so there is
+    # no real assessed history to summarize -- summary is correctly None.
+    assert body["summary"] is None
+
+
+@pytest.mark.integration
+def test_summary_is_absent_mid_game(client):
+    client.post("/new-game", json={"color": "white"})
+
+    response = client.post("/move", json={"uci": "e2e4"})
+
+    assert response.json()["summary"] is None
+
+
+@pytest.mark.integration
+def test_summary_appears_when_the_game_ends_with_real_prior_history(client):
+    # Simulates a game that already had one assessed ply before the winning
+    # move -- unlike the injected mate-in-1 fixture above, which starts a
+    # "game" with no history at all -- to confirm _summary is actually wired
+    # into the live response, not just correct in isolation.
+    client.post("/new-game", json={"color": "white"})
+    app.state.game = Game(user_color="white", fen=WHITE_MATE_IN_1_FEN)
+    app.state.assessment_history = [
+        ("white", Assessment(classification="good", loss_cp=15, best_move=None, continuation=[], offer_take_back=False))
+    ]
+
+    response = client.post("/move", json={"uci": "e1e8"})
+
+    body = response.json()
+    assert body["is_over"] is True
+    assert body["summary"] is not None
+    assert body["summary"]["decided_at_ply"] == 1
+    assert body["summary"]["decided_by"] == "white"
+    assert body["summary"]["loss_cp"] == 15
 
 
 @pytest.mark.integration
