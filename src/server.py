@@ -18,7 +18,7 @@ from fastapi.responses import FileResponse, PlainTextResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
-from src.coach import narrate_goat_move
+from src.coach import narrate_assessment, narrate_goat_move
 from src.engine import Analysis, Candidate, Engine, EngineUnavailable
 from src.game import Game, IllegalMove
 from src.narration import DEFAULT_LANGUAGE, LANGUAGES
@@ -75,6 +75,7 @@ class AssessmentResponse(BaseModel):
     best_move: str | None
     continuation: list[str]
     offer_take_back: bool
+    commentary: str
 
 
 class SummaryResponse(BaseModel):
@@ -157,6 +158,7 @@ def new_game(body: NewGameRequest) -> GameStateResponse:
         tutor=None,
         mistake_counts=app.state.mistake_counts,
         assessment_history=app.state.assessment_history,
+        language=app.state.language,
     )
 
 
@@ -213,6 +215,7 @@ def make_move(body: MoveRequest) -> GameStateResponse:
         tutor_assessment,
         mistake_counts=app.state.mistake_counts,
         assessment_history=app.state.assessment_history,
+        language=app.state.language,
     )
 
 
@@ -244,6 +247,7 @@ def take_back() -> GameStateResponse:
         tutor=None,
         mistake_counts=app.state.mistake_counts,
         assessment_history=app.state.assessment_history,
+        language=app.state.language,
     )
 
 
@@ -336,6 +340,7 @@ def _state_response(
     tutor: Assessment | None,
     mistake_counts: dict[str, dict[str, int]],
     assessment_history: list[tuple[str, Assessment] | None],
+    language: str,
 ) -> GameStateResponse:
     top_candidate: Candidate | None = None
     if analysis is not None and analysis.candidates:
@@ -349,6 +354,7 @@ def _state_response(
             best_move=tutor.best_move,
             continuation=tutor.continuation,
             offer_take_back=tutor.offer_take_back,
+            commentary=narrate_assessment(tutor, language),
         )
 
     return GameStateResponse(

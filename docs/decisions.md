@@ -244,3 +244,7 @@ language, can still produce phrasing that reads as a *new* reason rather
 than a restatement of an existing one. Wrapping `narration.py`'s own output
 removes that degree of freedom — the same sentence a network outage would
 show is the only material the model is allowed to riff on.
+
+`narrate_assessment` (session 3, the tutor's voice) follows the identical
+pattern over `describe_assessment`'s output instead — this decision covers
+both voices, not just the GOAT's.

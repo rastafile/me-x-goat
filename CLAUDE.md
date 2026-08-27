@@ -54,9 +54,10 @@ One module, one responsibility. None of them import the server.
 - `tutor.py` — pure function. Classifies a move (excellent through blunder) by
   comparing an `Analysis` from before it and one from after it -- never touches
   `persona.py`. No network, no state.
-- `narration.py` — pure function. Builds the opponent's commentary from tags and an
-  evaluation, no model. This is the degraded-mode text `coach.py` falls back to when
-  narration is unavailable, per the error-handling table in `docs/design.md`.
+- `narration.py` — pure functions. Builds both voices' commentary -- the opponent's
+  from tags and an evaluation, the tutor's from an `Assessment` -- no model. This is
+  the degraded-mode text `coach.py` falls back to when narration is unavailable, per
+  the error-handling table in `docs/design.md`.
 - `coach.py` — the only boundary with the narration API. Turns tags and numbers into
   prose, and falls back to `narration.py`'s text when the API fails.
 - `server.py` — HTTP and orchestration. No chess logic.

@@ -5,8 +5,9 @@ deterministic text on any failure -- network, timeout, a missing key, a
 malformed or empty response. CLAUDE.md invariant 5: no code path here may
 ever block a game on network availability.
 
-Wraps narration.py's *output*, not persona.py's raw tags, on purpose --
-see docs/decisions.md ADR 7.
+Wraps narration.py's *output*, not persona.py's or tutor.py's raw data, on
+purpose -- see docs/decisions.md ADR 7. narrate_goat_move is the opponent's
+voice; narrate_assessment is the tutor's.
 """
 
 import os
@@ -15,8 +16,9 @@ import anthropic
 
 from src.engine import Analysis
 from src.game import Game
-from src.narration import describe_move
+from src.narration import describe_assessment, describe_move
 from src.persona import Choice
+from src.tutor import Assessment
 
 _MODEL = os.environ.get("ANTHROPIC_MODEL", "claude-haiku-4-5-20251001")
 _MAX_TOKENS = 200
@@ -29,6 +31,13 @@ _GOAT_SYSTEM_PROMPT = (
     "You may only change how it's said, never what it says: do not add a chess claim, reason, "
     "square, or move name that isn't already in the note."
 )
+_TUTOR_SYSTEM_PROMPT = (
+    "You are a chess tutor speaking directly to the student, in the second person, right after "
+    "their move. Rewrite the note you're given into natural, encouraging sentences in {language}. "
+    "You may only change how it's said, never what it says: do not add a chess claim, reason, "
+    "square, or move name that isn't already in the note. If the note ends in a question (an "
+    "offer to take the move back), keep it as a question at the end."
+)
 
 
 def narrate_goat_move(analysis: Analysis, choice: Choice, game: Game, language: str) -> str:
@@ -37,13 +46,22 @@ def narrate_goat_move(analysis: Analysis, choice: Choice, game: Game, language: 
     be used, so the enriched and degraded paths always agree on the
     underlying facts, never just on style (ADR 7)."""
     grounding = describe_move(analysis, choice, game, language)
+    return _narrate(grounding, language, _GOAT_SYSTEM_PROMPT)
 
+
+def narrate_assessment(assessment: Assessment, language: str) -> str:
+    """Same shape as narrate_goat_move, for the tutor's voice instead."""
+    grounding = describe_assessment(assessment, language)
+    return _narrate(grounding, language, _TUTOR_SYSTEM_PROMPT)
+
+
+def _narrate(grounding: str, language: str, system_prompt: str) -> str:
     api_key = os.environ.get("ANTHROPIC_API_KEY")
     if not api_key:
         return grounding
 
     try:
-        return _enrich(grounding, language, api_key)
+        return _enrich(grounding, language, api_key, system_prompt)
     except Exception:
         # The one deliberately broad except in the codebase (CLAUDE.md
         # otherwise requires named domain exceptions): invariant 5 requires
@@ -54,12 +72,12 @@ def narrate_goat_move(analysis: Analysis, choice: Choice, game: Game, language: 
         return grounding
 
 
-def _enrich(grounding: str, language: str, api_key: str) -> str:
+def _enrich(grounding: str, language: str, api_key: str, system_prompt: str) -> str:
     client = anthropic.Anthropic(api_key=api_key)
     response = client.messages.create(
         model=_MODEL,
         max_tokens=_MAX_TOKENS,
-        system=_GOAT_SYSTEM_PROMPT.format(language=_LANGUAGE_NAMES.get(language, "English")),
+        system=system_prompt.format(language=_LANGUAGE_NAMES.get(language, "English")),
         messages=[{"role": "user", "content": f"Note: {grounding}"}],
     )
     text = "".join(block.text for block in response.content if block.type == "text").strip()

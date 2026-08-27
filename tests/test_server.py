@@ -1,8 +1,8 @@
 """Sessions 1-2 of docs/week-2.md (/new-game, /move, the evaluation
 perspective flip) plus sessions 2-4 of docs/week-3.md (tutor.assess wired
 into /move, mistake counts both sides, the end-of-game summary) plus
-sessions 1-2 of docs/week-4.md (the requested language reaching app.state;
-goat_move.commentary wired through coach.py).
+sessions 1-3 of docs/week-4.md (the requested language reaching app.state;
+goat_move.commentary and tutor.commentary both wired through coach.py).
 
 Anything that spins up the app needs a real Stockfish (lifespan starts one),
 so those tests are marked integration individually. _evaluation_for_user is
@@ -285,6 +285,20 @@ def test_a_bad_user_move_gets_a_tutor_assessment_with_a_stronger_alternative(cli
     assert tutor is not None
     assert tutor["classification"] not in ("excellent", "good")
     assert tutor["best_move"] is not None
+
+
+@pytest.mark.integration
+def test_tutor_assessment_includes_narrated_commentary(client):
+    # No ANTHROPIC_API_KEY in the test environment -- exercises coach.py's
+    # degraded path (narration.describe_assessment) through the real
+    # /new-game -> /move wiring, in the requested language.
+    client.post("/new-game", json={"color": "white", "strength": 800, "language": "pt-BR"})
+
+    response = client.post("/move", json={"uci": "g1h3"})
+
+    commentary = response.json()["tutor"]["commentary"]
+    assert isinstance(commentary, str)
+    assert commentary != ""
 
 
 @pytest.mark.integration
