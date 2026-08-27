@@ -64,6 +64,12 @@
       <span data-i18n="mateBadgeToggle">Mate badge</span>
     </label>
   </div>
+  <div>
+    <label for="eval-bar-toggle">
+      <input type="checkbox" id="eval-bar-toggle" checked>
+      <span data-i18n="evalBarToggle">Evaluation bar</span>
+    </label>
+  </div>
 </div>
 
 <!-- design.md §7: announces mate's existence and distance only, never the
@@ -71,7 +77,16 @@
      there's nothing to announce or the switch above is off. -->
 <div id="mate-badge"></div>
 
-<div id="board"></div>
+<div id="board-row">
+  <!-- design.md §8: "Evaluation bar on the side, with a hide option."
+       Fill grows from the bottom -- the user's own pieces are always at
+       the bottom of the board too (orientation follows their color), so
+       the bar's "up" matches the board's. -->
+  <div id="eval-bar">
+    <div id="eval-bar-fill"></div>
+  </div>
+  <div id="board"></div>
+</div>
 
 <div id="controls">
   <button type="button" id="take-back-button" data-i18n="takeBack" disabled>Take back</button>
