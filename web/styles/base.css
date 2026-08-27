@@ -30,6 +30,38 @@ body {
   min-height: 3em;
 }
 
+/* Visually distinct from #status -- the tutor is a second voice, not the
+   GOAT's, per design.md §8. */
+#tutor-panel {
+  white-space: pre-line;
+  min-height: 1em;
+  margin: 0.5rem 0;
+  padding: 0.5rem 0.75rem;
+  border-left: 4px solid #6a4c93;
+  background: rgba(106, 76, 147, 0.08);
+}
+
+#tutor-panel:empty {
+  display: none;
+}
+
+#tutor-panel button {
+  display: block;
+  margin-top: 0.5rem;
+}
+
+#mistake-panel {
+  white-space: pre-line;
+  font-size: 0.9em;
+  color: #555;
+}
+
+#summary-panel {
+  white-space: pre-line;
+  font-weight: bold;
+  margin: 0.5rem 0;
+}
+
 button:disabled {
   opacity: 0.5;
 }

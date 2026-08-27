@@ -87,7 +87,9 @@ uvicorn src.server:app
 ```
 
 Open `http://localhost:8000`, pick a color, strength, and style, and play on the
-board. If you take black, the opponent opens.
+board. If you take black, the opponent opens. The page itself has a language
+switch (English / Português) independent of `OUTPUT_LANGUAGE` below -- see
+[`docs/decisions.md`](docs/decisions.md) ADR 6.
 
 A terminal-only mode still exists (`python -m src.play_cli`) from before the browser
 board existed; the web app above is the real way to play now.

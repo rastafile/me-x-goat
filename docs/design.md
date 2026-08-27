@@ -260,8 +260,8 @@ low strength, but not so inattentive as to miss an obvious mate.
 - Evaluation bar on the side, with a hide option.
 - Mate badge above the board per section 7, with its own switch.
 - Board orientation follows the user's color, their pieces at the bottom.
-- Controls: color, strength, style, theme, mate badge, take back, new game, export
-  PGN.
+- Controls: color, strength, style, theme, language, mate badge, take back, new
+  game, export PGN.
 - Color is chosen on the new-game screen and does not change mid-game.
 
 ### Themes

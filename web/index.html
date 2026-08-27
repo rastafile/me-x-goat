@@ -22,31 +22,40 @@
 
 <div id="new-game-panel">
   <div>
-    <span>Play as:</span>
-    <button type="button" data-color="white">White</button>
-    <button type="button" data-color="black">Black</button>
-    <button type="button" data-color="random">Random</button>
+    <span data-i18n="playAs">Play as:</span>
+    <button type="button" data-color="white" data-i18n="white">White</button>
+    <button type="button" data-color="black" data-i18n="black">Black</button>
+    <button type="button" data-color="random" data-i18n="random">Random</button>
   </div>
   <div>
-    <label for="strength-input">Strength:</label>
+    <label for="strength-input" data-i18n="strength">Strength:</label>
     <input type="range" id="strength-input" min="800" max="2800" step="100" value="1400">
     <span id="strength-value">1400</span>
   </div>
   <div>
-    <label for="style-input">Style:</label>
+    <label for="style-input" data-i18n="style">Style:</label>
     <select id="style-input">
-      <option value="carlsen">Carlsen</option>
-      <option value="raw">Raw engine</option>
+      <option value="carlsen" data-i18n="styleCarlsen">Carlsen</option>
+      <option value="raw" data-i18n="styleRaw">Raw engine</option>
     </select>
   </div>
   <div>
-    <label for="theme-input">Theme:</label>
+    <label for="theme-input" data-i18n="theme">Theme:</label>
     <select id="theme-input">
-      <option value="wood">Wood</option>
-      <option value="classic-green">Classic green</option>
-      <option value="blue">Blue</option>
-      <option value="marble">Marble</option>
-      <option value="high-contrast">High contrast</option>
+      <option value="wood" data-i18n="themeWood">Wood</option>
+      <option value="classic-green" data-i18n="themeClassicGreen">Classic green</option>
+      <option value="blue" data-i18n="themeBlue">Blue</option>
+      <option value="marble" data-i18n="themeMarble">Marble</option>
+      <option value="high-contrast" data-i18n="themeHighContrast">High contrast</option>
+    </select>
+  </div>
+  <div>
+    <label for="language-input" data-i18n="language">Language:</label>
+    <!-- Each language names itself, not translated by the switch itself --
+         the same convention every language picker follows. -->
+    <select id="language-input">
+      <option value="en-US">English</option>
+      <option value="pt-BR">Português (Brasil)</option>
     </select>
   </div>
 </div>
@@ -54,11 +63,20 @@
 <div id="board"></div>
 
 <div id="controls">
-  <button type="button" id="take-back-button" disabled>Take back</button>
-  <button type="button" id="export-pgn-button" disabled>Export PGN</button>
+  <button type="button" id="take-back-button" data-i18n="takeBack" disabled>Take back</button>
+  <button type="button" id="export-pgn-button" data-i18n="exportPgn" disabled>Export PGN</button>
 </div>
 
 <div id="status"></div>
+
+<!-- Visually distinct from #status (the GOAT's own voice) per design.md
+     §8: "Tutor panel and GOAT panel visually distinct -- two voices, two
+     places." Populated only after the user's own moves. -->
+<div id="tutor-panel"></div>
+
+<div id="mistake-panel"></div>
+
+<div id="summary-panel"></div>
 
 <script type="module" src="/static/app.js"></script>
 </body>
