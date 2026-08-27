@@ -55,9 +55,9 @@ persona.py         tutor.py
 | `engine.py` | Speaks UCI with Stockfish. Takes a FEN, returns the N best moves with evaluation (MultiPV), distinguishing centipawn scores from distance to mate. | Stockfish |
 | `persona.py` | Picks the GOAT's move from the candidates by applying style heuristics. Returns the move plus intent tags. | `engine` |
 | `tutor.py` | Analyzes the move the user just played. Classifies its quality and projects the likely continuation. | `engine` |
-| `narration.py` | Builds the opponent's commentary from tags and an evaluation, deterministically, no model. The degraded-mode text `coach.py` falls back to (see §9). | `persona`, `engine` |
-| `coach.py` | Turns tags and numbers into natural language via the API. Two distinct voices: GOAT and tutor. Falls back to `narration.py` when the API is unavailable. | API, `narration` |
-| `game.py` | Game state, move validation, game-over detection, PGN export. | python-chess |
+| `narration.py` | Builds all three voices' text (opponent, tutor, game plan) from tags and numbers, deterministically, no model. The degraded-mode text `coach.py` falls back to (see §9). | `persona`, `engine`, `tutor` |
+| `coach.py` | Turns tags and numbers into natural language via the API. Three distinct voices: GOAT, tutor, game plan. Falls back to `narration.py` when the API is unavailable. | API, `narration` |
+| `game.py` | Game state, move validation, game-over detection, PGN export, structural position facts for the game plan (§5). | python-chess |
 | `server.py` | HTTP endpoints and turn orchestration. | all |
 | `web/` | Board, panels, themes, controls. | cm-chessboard |
 
@@ -159,9 +159,19 @@ implementation.
 ### Game plan
 
 Persistent text, separate from the per-move commentary. It is rewritten only when the
-nature of the position changes: queens come off, a file opens, the pawn structure
-shifts, an endgame begins. `persona.py` flags those transitions; between them, the
-plan stays put on screen.
+nature of the position changes; between transitions, the plan stays put on screen.
+
+`game.py` computes plain structural facts about the current position (queens on the
+board, which files have no pawns, whether only kings and pawns remain); `server.py`
+diffs two of those snapshots to decide whether something changed, since detecting a
+phase shift has nothing to do with `persona.py`'s job of picking a style-scored move.
+See `docs/decisions.md` ADR 8.
+
+v1 detects three concrete transitions: queens come off (any decrease, not only a full
+trade), a file opens, an endgame begins (only kings and pawns remain). "The pawn
+structure shifts" — this section's original, broader wording — was judged too fuzzy
+to define precisely for v1 and was cut from what actually ships; the three above are
+what a diff of plain position facts can detect without guessing at something vaguer.
 
 ## 6. The tutor
 
@@ -255,13 +265,14 @@ low strength, but not so inattentive as to miss an obvious mate.
 ## 8. Interface
 
 - cm-chessboard board: drag pieces, last-move highlight, legal destinations, premove.
-- Tutor panel and GOAT panel visually distinct — two voices, two places.
+- Tutor panel, GOAT panel, and game plan panel visually distinct — three voices,
+  three places.
 - Game plan in its own persistent area.
 - Evaluation bar on the side, with a hide option.
 - Mate badge above the board per section 7, with its own switch.
 - Board orientation follows the user's color, their pieces at the bottom.
-- Controls: color, strength, style, theme, language, mate badge, take back, new
-  game, export PGN.
+- Controls: color, strength, style, theme, language, mate badge, evaluation bar,
+  take back, new game, export PGN.
 - Color is chosen on the new-game screen and does not change mid-game.
 
 ### Themes
