@@ -15,11 +15,14 @@ from fastapi.testclient import TestClient
 from src.engine import Candidate, EngineUnavailable
 from src.game import Game
 from src.narration import DEFAULT_LANGUAGE
-from src.server import _evaluation_for_user, _fresh_mistake_counts, _summary, _track_assessment, app
+from src.server import _evaluation_for_user, _fresh_mistake_counts, _mate_in_for_user, _summary, _track_assessment, app
 from src.tutor import Assessment
 
 START_FEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
 WHITE_MATE_IN_1_FEN = "6k1/5ppp/8/8/8/8/5PPP/4R1K1 w - - 0 1"
+# White to move, but already doomed -- black's rooks force mate in 1
+# regardless of white's reply.
+WHITE_MATED_IN_1_FEN = "K7/8/1k6/8/8/8/8/r6r w - - 0 1"
 # Fool's mate's final position -- an already-delivered checkmate, so
 # Game(fen=...).is_over() is True with zero moves needed to get there.
 CHECKMATED_FEN = "rnb1kbnr/pppp1ppp/8/4p3/6Pq/5P2/PPPPP2P/RNBQKBNR w KQkq - 1 3"
@@ -51,6 +54,24 @@ def test_evaluation_for_user_is_none_for_a_mate_typed_candidate():
 
     assert _evaluation_for_user(candidate, "white") is None
     assert _evaluation_for_user(candidate, "black") is None
+
+
+def test_mate_in_for_user_flips_sign_for_a_black_user():
+    candidate = Candidate(move="d1h5", score_cp=None, mate_in=3, pv=["d1h5"])
+
+    assert _mate_in_for_user(candidate, "white") == 3
+    assert _mate_in_for_user(candidate, "black") == -3
+
+
+def test_mate_in_for_user_is_none_for_a_cp_typed_candidate():
+    candidate = Candidate(move="e2e4", score_cp=80, mate_in=None, pv=["e2e4"])
+
+    assert _mate_in_for_user(candidate, "white") is None
+    assert _mate_in_for_user(candidate, "black") is None
+
+
+def test_mate_in_for_user_is_none_without_a_candidate():
+    assert _mate_in_for_user(None, "white") is None
 
 
 def test_evaluation_for_user_is_none_without_a_candidate():
@@ -195,6 +216,20 @@ def test_evaluation_is_strongly_positive_when_a_black_user_is_ahead(client):
     response = client.post("/move", json={"uci": "d7d5"})
 
     assert response.json()["evaluation"] > 300
+
+
+@pytest.mark.integration
+def test_mate_in_is_negative_when_the_user_is_left_facing_a_forced_mate(client):
+    # White is already doomed no matter what it plays; after any white
+    # reply, black (the GOAT here) is left with a forced mate in 1 --
+    # negative for the white user, per _mate_in_for_user's convention.
+    client.post("/new-game", json={"color": "white"})
+    app.state.game = Game(user_color="white", fen=WHITE_MATED_IN_1_FEN)
+
+    response = client.post("/move", json={"uci": "a8b8"})
+
+    assert response.json()["mate_in"] is not None
+    assert response.json()["mate_in"] < 0
 
 
 @pytest.mark.integration

@@ -10,9 +10,11 @@
 // state.goat_move.commentary / state.tutor.commentary verbatim. What's left
 // in this module is: static UI labels (buttons, dropdowns), the mistake
 // counts and end-of-game summary (still server-structured numbers, no prose
-// from coach.py this week), and the one status line the server can't
-// narrate -- the outcome phrase for a game the user's own move ended,
-// where there's no GOAT reply to carry it.
+// from coach.py this week), the mate badge's templated text (session 5 --
+// a number plugged into a fixed phrase, not model prose, so it stays here
+// rather than moving server-side), and the one status line the server
+// can't narrate -- the outcome phrase for a game the user's own move
+// ended, where there's no GOAT reply to carry it.
 //
 // Chess notation (UCI, SAN) is never translated -- it's already universal.
 // The two <option> labels naming the languages themselves ("English",
@@ -42,8 +44,11 @@ const STRINGS = {
         themeHighContrast: "High contrast",
         takeBack: "Take back",
         exportPgn: "Export PGN",
+        mateBadgeToggle: "Mate badge",
         gameOver: (outcome) => `Game over: ${outcome}`,
         evaluation: (value) => `Evaluation: ${value > 0 ? "+" : ""}${value}`,
+        mateAvailable: (n) => `mate in ${n} available`,
+        mateFacing: (n) => `you are facing mate in ${n}`,
         takeThatBack: "Take that back",
         mistakeCountsLine: (label, side) =>
             `${label}: ${side.inaccuracy} inaccuracies, ${side.mistake} mistakes, ${side.blunder} blunders`,
@@ -77,8 +82,11 @@ const STRINGS = {
         themeHighContrast: "Alto contraste",
         takeBack: "Desfazer",
         exportPgn: "Exportar PGN",
+        mateBadgeToggle: "Aviso de mate",
         gameOver: (outcome) => `Fim de jogo: ${outcome}`,
         evaluation: (value) => `Avaliação: ${value > 0 ? "+" : ""}${value}`,
+        mateAvailable: (n) => `mate em ${n} disponível`,
+        mateFacing: (n) => `você está enfrentando mate em ${n}`,
         takeThatBack: "Desfazer esse lance",
         mistakeCountsLine: (label, side) =>
             `${label}: ${side.inaccuracy} imprecisões, ${side.mistake} erros, ${side.blunder} erros graves`,

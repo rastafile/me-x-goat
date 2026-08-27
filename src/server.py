@@ -94,6 +94,7 @@ class GameStateResponse(BaseModel):
     mistake_counts: dict[str, dict[str, int]]
     summary: SummaryResponse | None
     evaluation: int | None
+    mate_in: int | None
     is_over: bool
     outcome: str | None
 
@@ -366,6 +367,7 @@ def _state_response(
         mistake_counts=mistake_counts,
         summary=_summary(game, assessment_history, mistake_counts),
         evaluation=_evaluation_for_user(top_candidate, game.user_color),
+        mate_in=_mate_in_for_user(top_candidate, game.user_color),
         is_over=game.is_over(),
         outcome=game.outcome(),
     )
@@ -375,6 +377,16 @@ def _evaluation_for_user(candidate: Candidate | None, user_color: str) -> int | 
     if candidate is None or candidate.score_cp is None:
         return None
     return candidate.score_cp if user_color == "white" else -candidate.score_cp
+
+
+def _mate_in_for_user(candidate: Candidate | None, user_color: str) -> int | None:
+    """Positive: the user has the mate. Negative: the user is facing it.
+    Same flip convention as _evaluation_for_user, same top_candidate (the
+    same analysis already paid for) -- design.md §7's badge, no extra
+    Stockfish call."""
+    if candidate is None or candidate.mate_in is None:
+        return None
+    return candidate.mate_in if user_color == "white" else -candidate.mate_in
 
 
 def _movetime_ms(strength: int) -> int:

@@ -8,6 +8,7 @@ const statusEl = document.getElementById("status")
 const tutorPanelEl = document.getElementById("tutor-panel")
 const mistakePanelEl = document.getElementById("mistake-panel")
 const summaryPanelEl = document.getElementById("summary-panel")
+const mateBadgeEl = document.getElementById("mate-badge")
 const takeBackButton = document.getElementById("take-back-button")
 const exportPgnButton = document.getElementById("export-pgn-button")
 const strengthInput = document.getElementById("strength-input")
@@ -15,9 +16,13 @@ const strengthValueEl = document.getElementById("strength-value")
 const styleInput = document.getElementById("style-input")
 const themeInput = document.getElementById("theme-input")
 const languageInput = document.getElementById("language-input")
+const mateBadgeToggle = document.getElementById("mate-badge-toggle")
 
 const DEFAULT_THEME = "wood"
 const THEME_STORAGE_KEY = "theme"
+// design.md §7: the badge has its own switch, default on, so a user can
+// wean themselves off it once the skill of scanning for mate forms.
+const MATE_BADGE_STORAGE_KEY = "mateBadgeEnabled"
 
 // Server state mirrored client-side so the board's input handler can
 // validate drags without asking the server on every hover.
@@ -55,17 +60,42 @@ languageInput.addEventListener("change", () => {
         renderDynamicPanels(lastState)
     }
 })
+mateBadgeToggle.addEventListener("change", () => {
+    storeMateBadgeEnabled(mateBadgeToggle.checked)
+    if (lastState) {
+        renderMateBadge(lastState.mate_in)
+    }
+})
 
 applyTheme(loadStoredTheme())
 const initialLanguage = loadStoredLanguage()
 languageInput.value = initialLanguage
 setLanguage(initialLanguage)
+mateBadgeToggle.checked = loadStoredMateBadgeEnabled()
 
 function loadStoredTheme() {
     try {
         return localStorage.getItem(THEME_STORAGE_KEY) || DEFAULT_THEME
     } catch {
         return DEFAULT_THEME
+    }
+}
+
+function loadStoredMateBadgeEnabled() {
+    try {
+        const stored = localStorage.getItem(MATE_BADGE_STORAGE_KEY)
+        return stored === null ? true : stored === "true"
+    } catch {
+        return true
+    }
+}
+
+function storeMateBadgeEnabled(enabled) {
+    try {
+        localStorage.setItem(MATE_BADGE_STORAGE_KEY, String(enabled))
+    } catch {
+        // Private browsing / storage disabled: the switch still applies for
+        // this page load, it just won't be remembered next time.
     }
 }
 
@@ -243,6 +273,20 @@ function renderDynamicPanels(state) {
     renderTutor(state.tutor)
     renderMistakeCounts(state.mistake_counts)
     renderSummary(state.summary)
+    renderMateBadge(state.mate_in)
+}
+
+function renderMateBadge(mateIn) {
+    // The server always computes mate_in; the switch is a pure display
+    // choice (same pattern as the theme), never a reason to skip asking.
+    if (!mateBadgeToggle.checked || typeof mateIn !== "number") {
+        mateBadgeEl.textContent = ""
+        return
+    }
+    const strings = t()
+    // Never the piece, square, or move -- design.md §7's central rule.
+    // mateAvailable/mateFacing only ever take the distance, nothing else.
+    mateBadgeEl.textContent = mateIn > 0 ? strings.mateAvailable(mateIn) : strings.mateFacing(-mateIn)
 }
 
 function renderTutor(tutor) {
