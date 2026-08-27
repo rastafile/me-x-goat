@@ -36,6 +36,15 @@ _ANALYSIS_TIME_TABLE = [
     (2400, 800),
 ]
 
+_MISTAKE_TIERS = ("inaccuracy", "mistake", "blunder")
+
+
+def _fresh_mistake_counts() -> dict[str, dict[str, int]]:
+    return {
+        "white": {tier: 0 for tier in _MISTAKE_TIERS},
+        "black": {tier: 0 for tier in _MISTAKE_TIERS},
+    }
+
 
 class NewGameRequest(BaseModel):
     color: Literal["white", "black", "random"] = "random"
@@ -67,6 +76,7 @@ class GameStateResponse(BaseModel):
     legal_moves: list[str]
     goat_move: GoatMove | None
     tutor: AssessmentResponse | None
+    mistake_counts: dict[str, dict[str, int]]
     evaluation: int | None
     is_over: bool
     outcome: str | None
@@ -86,6 +96,14 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.game = None
     app.state.style = "carlsen"
     app.state.strength = 1400
+    app.state.mistake_counts = _fresh_mistake_counts()
+    # One entry per ply ever pushed via /move (both the user's and the
+    # GOAT's), kept in lockstep with game.ply_count -- (color, Assessment)
+    # when the ply was actually assessed, None otherwise (the opening move
+    # played from /new-game, or a move with no "after" analysis because it
+    # ended the game). /take-back pops this alongside game.pop() to undo
+    # whatever mistake count that ply had added.
+    app.state.assessment_history = []
     yield
     engine.close()
 
@@ -105,12 +123,15 @@ def new_game(body: NewGameRequest) -> GameStateResponse:
     app.state.game = game
     app.state.style = body.style
     app.state.strength = body.strength
+    app.state.mistake_counts = _fresh_mistake_counts()
+    app.state.assessment_history = []
 
     goat_move, analysis = None, None
     if not game.waiting_for_user:
         goat_move, analysis = _play_goat_move(game, app.state.engine, body.style, body.strength)
+        app.state.assessment_history.append(None)  # opening move, not assessed
 
-    return _state_response(game, goat_move, analysis, tutor=None)
+    return _state_response(game, goat_move, analysis, tutor=None, mistake_counts=app.state.mistake_counts)
 
 
 @app.post("/move", response_model=GameStateResponse)
@@ -129,6 +150,7 @@ def make_move(body: MoveRequest) -> GameStateResponse:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     before = app.state.engine.analyse(fen_before_move, movetime_ms=_movetime_ms(app.state.strength))
+    user_color = game.user_color
 
     goat_move, analysis = None, None
     if not game.is_over():
@@ -140,9 +162,25 @@ def make_move(body: MoveRequest) -> GameStateResponse:
     # ended the game, and there's nothing left to analyse.
     tutor_assessment = None
     if analysis is not None:
-        tutor_assessment = assess(before, body.uci, analysis, game.user_color)
+        tutor_assessment = assess(before, body.uci, analysis, user_color)
+    _track_assessment(app.state.assessment_history, app.state.mistake_counts, user_color, tutor_assessment)
 
-    return _state_response(game, goat_move, analysis, tutor_assessment)
+    # The GOAT's own move gets the same treatment, for the "both sides"
+    # mistake count design.md asks for -- tutor.assess doesn't care whose
+    # move it classifies (ADR 4), so this is a policy choice, not a design
+    # change. Costs one further analyse() call, on the position after the
+    # GOAT's own reply.
+    if goat_move is not None:
+        goat_color = "black" if user_color == "white" else "white"
+        goat_assessment = None
+        if not game.is_over():
+            after_goat = app.state.engine.analyse(game.fen, movetime_ms=_movetime_ms(app.state.strength))
+            goat_assessment = assess(analysis, goat_move.uci, after_goat, goat_color)
+        _track_assessment(app.state.assessment_history, app.state.mistake_counts, goat_color, goat_assessment)
+
+    return _state_response(
+        game, goat_move, analysis, tutor_assessment, mistake_counts=app.state.mistake_counts
+    )
 
 
 @app.post("/take-back", response_model=GameStateResponse)
@@ -161,8 +199,14 @@ def take_back() -> GameStateResponse:
 
     for _ in range(plies_to_pop):
         game.pop()
+        undone = app.state.assessment_history.pop()
+        if undone is not None:
+            color, assessment = undone
+            _adjust_mistake_count(app.state.mistake_counts, color, assessment.classification, -1)
 
-    return _state_response(game, goat_move=None, analysis=None, tutor=None)
+    return _state_response(
+        game, goat_move=None, analysis=None, tutor=None, mistake_counts=app.state.mistake_counts
+    )
 
 
 @app.get("/pgn")
@@ -184,11 +228,36 @@ def _play_goat_move(
     return GoatMove(uci=result.move, san=san, tags=result.tags), analysis
 
 
+def _track_assessment(
+    assessment_history: list[tuple[str, Assessment] | None],
+    mistake_counts: dict[str, dict[str, int]],
+    color: str,
+    assessment: Assessment | None,
+) -> None:
+    """Appends one entry to assessment_history, keeping it in lockstep with
+    game.ply_count, and increments mistake_counts if the assessment
+    qualifies. `assessment=None` records a ply that was never assessed (the
+    move ended the game before an "after" analysis was possible)."""
+    if assessment is None:
+        assessment_history.append(None)
+        return
+    assessment_history.append((color, assessment))
+    _adjust_mistake_count(mistake_counts, color, assessment.classification, 1)
+
+
+def _adjust_mistake_count(
+    mistake_counts: dict[str, dict[str, int]], color: str, classification: str, delta: int
+) -> None:
+    if classification in _MISTAKE_TIERS:
+        mistake_counts[color][classification] += delta
+
+
 def _state_response(
     game: Game,
     goat_move: GoatMove | None,
     analysis: Analysis | None,
     tutor: Assessment | None,
+    mistake_counts: dict[str, dict[str, int]],
 ) -> GameStateResponse:
     top_candidate: Candidate | None = None
     if analysis is not None and analysis.candidates:
@@ -210,6 +279,7 @@ def _state_response(
         legal_moves=game.legal_moves(),
         goat_move=goat_move,
         tutor=tutor_response,
+        mistake_counts=mistake_counts,
         evaluation=_evaluation_for_user(top_candidate, game.user_color),
         is_over=game.is_over(),
         outcome=game.outcome(),
