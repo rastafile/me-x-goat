@@ -38,7 +38,7 @@ Under construction, built in the open over four weeks.
 
 - [x] Week 1 — engine, game state, style filter (playable in the terminal)
 - [x] Week 2 — HTTP server, draggable board, themes
-- [ ] Week 3 — the tutor
+- [x] Week 3 — the tutor
 - [ ] Week 4 — narration layer, mate badge, tests, v1
 
 ## Requirements
