@@ -100,7 +100,7 @@ board existed; the web app above is the real way to play now.
 |---|---|---|
 | `STOCKFISH_PATH` | `stockfish` | Absolute path if not on `PATH` |
 | `ANTHROPIC_API_KEY` | unset | Without it, narration falls back to templates |
-| `OUTPUT_LANGUAGE` | `en` | Language of tutor and opponent commentary |
+| `OUTPUT_LANGUAGE` | `en-US` | `en-US` or `pt-BR`. Only affects `play_cli.py` -- the web app's own language switch controls the browser session instead (see [`docs/decisions.md`](docs/decisions.md) ADR 6) |
 
 ## Design
 

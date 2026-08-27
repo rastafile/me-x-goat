@@ -90,6 +90,10 @@ async function startNewGame(color) {
             color,
             strength: Number(strengthInput.value),
             style: styleInput.value,
+            // The page's own switch (docs/decisions.md ADR 6) -- stored in
+            // localStorage via i18n.js, always in sync with this select's
+            // value.
+            language: languageInput.value,
         }),
     })
     const state = await response.json()

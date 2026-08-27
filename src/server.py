@@ -20,6 +20,7 @@ from pydantic import BaseModel, Field
 
 from src.engine import Analysis, Candidate, Engine, EngineUnavailable
 from src.game import Game, IllegalMove
+from src.narration import DEFAULT_LANGUAGE, LANGUAGES
 from src.persona import choose
 from src.tutor import Assessment, assess
 
@@ -50,6 +51,10 @@ class NewGameRequest(BaseModel):
     color: Literal["white", "black", "random"] = "random"
     strength: int = Field(default=1400, ge=800, le=2800)
     style: Literal["carlsen", "raw"] = "carlsen"
+    # Not a Literal: an unrecognized value should fall back to
+    # DEFAULT_LANGUAGE, not reject the request -- same rule web/i18n.js
+    # already applies client-side, kept in _new_game_language below.
+    language: str = DEFAULT_LANGUAGE
 
 
 class MoveRequest(BaseModel):
@@ -104,6 +109,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.game = None
     app.state.style = "carlsen"
     app.state.strength = 1400
+    app.state.language = DEFAULT_LANGUAGE
     app.state.mistake_counts = _fresh_mistake_counts()
     # One entry per ply ever pushed via /move (both the user's and the
     # GOAT's), kept in lockstep with game.ply_count -- (color, Assessment)
@@ -131,6 +137,7 @@ def new_game(body: NewGameRequest) -> GameStateResponse:
     app.state.game = game
     app.state.style = body.style
     app.state.strength = body.strength
+    app.state.language = body.language if body.language in LANGUAGES else DEFAULT_LANGUAGE
     app.state.mistake_counts = _fresh_mistake_counts()
     app.state.assessment_history = []
 
