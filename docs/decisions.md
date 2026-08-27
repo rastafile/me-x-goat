@@ -163,3 +163,47 @@ already deferred an opening book for unrelated infrastructure reasons; this
 ADR is the record that it also matters for style specifically, not only as
 a nice-to-have, and that its absence is a known limitation of what "style"
 means in this app, not a settled design choice.
+
+---
+
+## ADR 6: The page's language switch is client-side, independent of `OUTPUT_LANGUAGE`
+
+### Context
+
+CLAUDE.md requires that "text shown to the end user is controlled by the
+`OUTPUT_LANGUAGE` setting... Do not hardcode user-facing strings in any
+single language." `OUTPUT_LANGUAGE` is documented (README) as a server
+startup setting, intended for the narration API's output once `coach.py`
+exists (week 4). But `coach.py` doesn't exist yet: every sentence the user
+sees today is assembled entirely client-side, in `web/app.js`, from
+structured data the server returns (a classification word, a cp number, a
+UCI move, an outcome enum) — the server itself never emits a sentence.
+
+### Decision
+
+Add a language switch to the page (English / Português (Brasil)), backed by
+a small client-side dictionary (`web/i18n.js`) and persisted the same way
+the theme already is — `localStorage`, no server round trip. Every string
+`app.js` shows the user, static labels and the dynamic tutor/mistake/summary
+panels alike, is routed through this module; nothing is hardcoded to one
+language, which satisfies CLAUDE.md's rule for everything the app actually
+displays right now.
+
+### Rejected alternative
+
+Wiring the switch to `OUTPUT_LANGUAGE` instead of building a page-side one.
+Rejected because `OUTPUT_LANGUAGE` is a server-process-wide startup setting
+with no channel from the browser to it without a new endpoint, and because
+it would fix the language for the whole server rather than letting whoever
+is actually looking at the screen choose it per visit.
+
+### Known limitation
+
+When `coach.py` starts generating real narration server-side (week 4), it
+will need to know which language to write in. The natural fix is for the
+page's own choice (already persisted client-side) to become the value the
+client sends the server as the requested narration language, with
+`OUTPUT_LANGUAGE` remaining the *server's own* default for contexts with no
+client attached (e.g. `play_cli.py`). That wiring doesn't exist yet and is
+deferred to whichever week actually builds `coach.py` — not designed here,
+per CLAUDE.md's scope rule against building ahead of the current plan.
