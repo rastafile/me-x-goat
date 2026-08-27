@@ -1,8 +1,10 @@
-"""Builds both voices' commentary from tags and numbers -- no model, no
+"""Builds all three voices' text from tags and numbers -- no model, no
 network, no API. This is the degraded-mode text design.md #9 requires when
 narration is unavailable; coach.py wraps this with the model in week 4 and
 falls back to it on failure. describe_move is the opponent's voice;
-describe_assessment is the tutor's.
+describe_assessment is the tutor's; describe_transition is the game plan's
+(design.md §5) -- third person, neutral, describing the position's phase
+rather than addressing anyone.
 
 Every phrase table is keyed by language first, same convention as
 web/i18n.js: no user-facing string lives in a single language anywhere in
@@ -118,6 +120,23 @@ _TAKE_BACK_OFFER: dict[str, str] = {
     "pt-BR": "Quer desfazer esse lance?",
 }
 
+# design.md §5's game-plan triggers this project actually detects (session 7
+# of docs/week-4.md scoped it to these three -- "pawn structure shifts" was
+# judged too fuzzy to define precisely for v1, same "guess now, calibrate
+# later" spirit as the classification thresholds elsewhere in this codebase).
+_TRANSITION_PHRASES: dict[str, dict[str, str]] = {
+    "en-US": {
+        "queens_off": "The queens have come off the board -- this is a fight without them now.",
+        "file_opens": "A file has opened up. Rooks belong on it.",
+        "pawn_endgame_begins": "Only kings and pawns are left. This is a pure endgame now -- every tempo counts.",
+    },
+    "pt-BR": {
+        "queens_off": "As damas saíram do tabuleiro -- a luta agora é sem elas.",
+        "file_opens": "Uma coluna se abriu. As torres pertencem a ela.",
+        "pawn_endgame_begins": "Só sobraram reis e peões. Isso agora é um final puro -- cada tempo conta.",
+    },
+}
+
 
 def describe_move(analysis: Analysis, choice: Choice, game: Game, language: str) -> str:
     """At most two lines, first person, as the opponent. `game` reflects the
@@ -183,3 +202,11 @@ def describe_assessment(assessment: Assessment, language: str) -> str:
         lines.append(_TAKE_BACK_OFFER[lang])
 
     return "\n".join(lines)
+
+
+def describe_transition(transition: str, language: str) -> str:
+    """One to two sentences describing the position's new phase. `transition`
+    is one of the keys in _TRANSITION_PHRASES (server.py's _detect_transition
+    is the only caller, so this never sees anything else)."""
+    lang = language if language in LANGUAGES else DEFAULT_LANGUAGE
+    return _TRANSITION_PHRASES[lang][transition]

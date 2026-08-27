@@ -248,3 +248,66 @@ show is the only material the model is allowed to riff on.
 `narrate_assessment` (session 3, the tutor's voice) follows the identical
 pattern over `describe_assessment`'s output instead — this decision covers
 both voices, not just the GOAT's.
+
+---
+
+## ADR 8: Game-plan transition detection — `game.py` computes facts, `server.py` diffs them
+
+### Context
+
+design.md §5's game plan is rewritten only on a structural transition
+(queens off, a file opens, an endgame begins), which needs a *before* and
+*after* position to diff against. `persona.py` is pure and stateless
+(`choose(candidates, ...) -> Choice`, no history) — it has no natural place
+for a two-position comparison. `server.py`'s own module docstring says "No
+chess logic lives here." Neither of the two shapes docs/week-4.md's
+session 7 draft proposed (persona.py gaining a comparison function, or
+server.py doing the diffing outright) is a clean fit as stated: the first
+conflates style-selection with structural narration, the second reads like
+exactly the "chess logic in server.py" the docstring rules out.
+
+### Decision
+
+Split it. `game.py` gains `phase_signature() -> PhaseSignature` — a
+snapshot of plain facts about the *current* position (queens on board,
+which files have no pawns, whether only kings and pawns remain) computed
+from `self._board`. This keeps "game.py is the only module that touches
+the board" (CLAUDE.md) intact: no other module ever calls into
+python-chess to answer these questions itself.
+
+`server.py` gains `_detect_transition(before, after) -> str | None`, which
+diffs two `PhaseSignature` snapshots server.py already asked `game.py` for.
+It only ever touches plain ints and frozensets — never `chess.Board`, never
+a UCI move, never python-chess at all. That keeps it on the orchestration
+side of the line the module docstring draws, the same side
+`_evaluation_for_user` and `_mate_in_for_user` already stand on (reading
+structured facts an object handed back, not deriving them from the rules
+of chess itself).
+
+### Rejected alternative
+
+`persona.py` gaining a stateless pure comparison function
+(`choose`'s sibling, taking two board states explicitly). Rejected because
+detecting "the game's phase changed" has nothing to do with picking a
+style-scored move — bolting it onto the module whose entire job is move
+selection would make `persona.py`'s contract harder to read for a reason
+unrelated to style, not easier.
+
+Also rejected: `server.py` calling `chess.Board` methods directly to
+inspect material and pawn structure itself, which is what "no chess logic
+lives here" was written to prevent in the first place — `game.py` doing
+that inspection and handing back a plain-data snapshot is what keeps the
+line real instead of just aspirational.
+
+### Known limitation
+
+`/take-back` does not undo a game-plan transition. Popping the move that
+triggered a phase change (e.g. undoing a queen trade) leaves the plan text
+as whatever it last became, rather than reverting to what it said before —
+unlike `mistake_counts`, which does get undone precisely via
+`assessment_history` (week 3). Precise undo here would need its own
+history stack (the transition text, and what it replaced, per ply), which
+this session didn't build: the game plan is an occasional narrative aid,
+not a fairness-affecting count, so a coarser fix was judged acceptable for
+v1. Revisit if it turns out to look actively wrong in play rather than
+just slightly stale.
