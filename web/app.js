@@ -9,6 +9,8 @@ const tutorPanelEl = document.getElementById("tutor-panel")
 const mistakePanelEl = document.getElementById("mistake-panel")
 const summaryPanelEl = document.getElementById("summary-panel")
 const mateBadgeEl = document.getElementById("mate-badge")
+const evalBarEl = document.getElementById("eval-bar")
+const evalBarFillEl = document.getElementById("eval-bar-fill")
 const takeBackButton = document.getElementById("take-back-button")
 const exportPgnButton = document.getElementById("export-pgn-button")
 const strengthInput = document.getElementById("strength-input")
@@ -17,12 +19,18 @@ const styleInput = document.getElementById("style-input")
 const themeInput = document.getElementById("theme-input")
 const languageInput = document.getElementById("language-input")
 const mateBadgeToggle = document.getElementById("mate-badge-toggle")
+const evalBarToggle = document.getElementById("eval-bar-toggle")
 
 const DEFAULT_THEME = "wood"
 const THEME_STORAGE_KEY = "theme"
 // design.md §7: the badge has its own switch, default on, so a user can
 // wean themselves off it once the skill of scanning for mate forms.
 const MATE_BADGE_STORAGE_KEY = "mateBadgeEnabled"
+const EVAL_BAR_STORAGE_KEY = "evalBarEnabled"
+// design.md §6's "saturating past some bound" -- a plain clamp-then-scale
+// is enough to guarantee no absurd sliver or overflow; no need for a
+// fancier curve than that.
+const EVAL_CAP_CP = 1000
 
 // Server state mirrored client-side so the board's input handler can
 // validate drags without asking the server on every hover.
@@ -66,12 +74,18 @@ mateBadgeToggle.addEventListener("change", () => {
         renderMateBadge(lastState.mate_in)
     }
 })
+evalBarToggle.addEventListener("change", () => {
+    storeEvalBarEnabled(evalBarToggle.checked)
+    renderEvalBar(lastState ? lastState.evaluation : null, lastState ? lastState.mate_in : null)
+})
 
 applyTheme(loadStoredTheme())
 const initialLanguage = loadStoredLanguage()
 languageInput.value = initialLanguage
 setLanguage(initialLanguage)
 mateBadgeToggle.checked = loadStoredMateBadgeEnabled()
+evalBarToggle.checked = loadStoredEvalBarEnabled()
+renderEvalBar(null, null)
 
 function loadStoredTheme() {
     try {
@@ -93,6 +107,24 @@ function loadStoredMateBadgeEnabled() {
 function storeMateBadgeEnabled(enabled) {
     try {
         localStorage.setItem(MATE_BADGE_STORAGE_KEY, String(enabled))
+    } catch {
+        // Private browsing / storage disabled: the switch still applies for
+        // this page load, it just won't be remembered next time.
+    }
+}
+
+function loadStoredEvalBarEnabled() {
+    try {
+        const stored = localStorage.getItem(EVAL_BAR_STORAGE_KEY)
+        return stored === null ? true : stored === "true"
+    } catch {
+        return true
+    }
+}
+
+function storeEvalBarEnabled(enabled) {
+    try {
+        localStorage.setItem(EVAL_BAR_STORAGE_KEY, String(enabled))
     } catch {
         // Private browsing / storage disabled: the switch still applies for
         // this page load, it just won't be remembered next time.
@@ -274,6 +306,7 @@ function renderDynamicPanels(state) {
     renderMistakeCounts(state.mistake_counts)
     renderSummary(state.summary)
     renderMateBadge(state.mate_in)
+    renderEvalBar(state.evaluation, state.mate_in)
 }
 
 function renderMateBadge(mateIn) {
@@ -287,6 +320,24 @@ function renderMateBadge(mateIn) {
     // Never the piece, square, or move -- design.md §7's central rule.
     // mateAvailable/mateFacing only ever take the distance, nothing else.
     mateBadgeEl.textContent = mateIn > 0 ? strings.mateAvailable(mateIn) : strings.mateFacing(-mateIn)
+}
+
+function renderEvalBar(evaluation, mateIn) {
+    // Same pure-display-choice pattern as the mate badge: the fill is still
+    // computed even when hidden, purely so toggling back on shows the
+    // right thing immediately without waiting on the next server response.
+    evalBarEl.classList.toggle("hidden", !evalBarToggle.checked)
+
+    let fraction = 0.5 // neutral: no evaluation yet (game start, game over)
+    if (typeof mateIn === "number") {
+        // A mate saturates the bar fully, in whichever direction it favors
+        // -- there's no cp scale to speak of once mate is forced.
+        fraction = mateIn > 0 ? 1 : 0
+    } else if (typeof evaluation === "number") {
+        const capped = Math.max(-EVAL_CAP_CP, Math.min(EVAL_CAP_CP, evaluation))
+        fraction = 0.5 + (capped / EVAL_CAP_CP) * 0.5
+    }
+    evalBarFillEl.style.height = `${(fraction * 100).toFixed(1)}%`
 }
 
 function renderTutor(tutor) {
