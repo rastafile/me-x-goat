@@ -1,21 +1,27 @@
 """Sessions 1-2 of docs/week-2.md (/new-game, /move, the evaluation
 perspective flip) plus sessions 2-4 of docs/week-3.md (tutor.assess wired
 into /move, mistake counts both sides, the end-of-game summary) plus
-sessions 1-3 of docs/week-4.md (the requested language reaching app.state;
-goat_move.commentary and tutor.commentary both wired through coach.py).
+sessions 1-3, 5, 7-8 of docs/week-4.md (the requested language reaching
+app.state; goat_move.commentary and tutor.commentary both wired through
+coach.py; the mate badge; the game plan panel; Stockfish crash resilience).
 
 Anything that spins up the app needs a real Stockfish (lifespan starts one),
-so those tests are marked integration individually. _evaluation_for_user is
-a pure function and is tested directly, without the app or Stockfish.
+so those tests are marked integration individually. Pure functions
+(_evaluation_for_user, _mate_in_for_user, _detect_transition,
+_analyse_with_retry, ...) are tested directly, without the app or Stockfish.
 """
+
+import copy
+from unittest.mock import MagicMock
 
 import pytest
 from fastapi.testclient import TestClient
 
-from src.engine import Candidate, EngineUnavailable
+from src.engine import Analysis, Candidate, EngineUnavailable
 from src.game import Game, PhaseSignature
 from src.narration import DEFAULT_LANGUAGE
 from src.server import (
+    _analyse_with_retry,
     _detect_transition,
     _evaluation_for_user,
     _fresh_mistake_counts,
@@ -140,7 +146,32 @@ def test_detect_transition_prioritizes_pawn_endgame_over_queens_off_and_file_ope
     after = _signature(queens=0, open_files=frozenset({4}), pawn_endgame=True)
 
     assert _detect_transition(before, after) == "pawn_endgame_begins"
-    assert _evaluation_for_user(None, "black") is None
+
+
+def test_analyse_with_retry_returns_the_result_after_one_restart():
+    # Duck-typed, not a real Engine -- _analyse_with_retry only ever calls
+    # .analyse()/.restart(), so a plain mock is enough to test the retry
+    # policy in isolation from engine.py's own restart mechanics (tested
+    # separately in test_engine.py).
+    fake_analysis = Analysis(fen="irrelevant", white_to_move=True, candidates=[])
+    mock_engine = MagicMock()
+    mock_engine.analyse.side_effect = [EngineUnavailable("boom"), fake_analysis]
+
+    result = _analyse_with_retry(mock_engine, "some-fen", 100)
+
+    assert result is fake_analysis
+    mock_engine.restart.assert_called_once()
+    assert mock_engine.analyse.call_count == 2
+
+
+def test_analyse_with_retry_propagates_when_the_second_attempt_also_fails():
+    mock_engine = MagicMock()
+    mock_engine.analyse.side_effect = EngineUnavailable("boom")  # every call raises
+
+    with pytest.raises(EngineUnavailable):
+        _analyse_with_retry(mock_engine, "some-fen", 100)
+
+    mock_engine.restart.assert_called_once()
 
 
 def test_track_assessment_increments_the_right_color_and_tier():
@@ -500,6 +531,35 @@ def test_illegal_move_is_rejected_and_state_is_untouched(client):
     good = client.post("/move", json={"uci": "e2e4"})
     assert good.status_code == 200
     assert good.json()["goat_move"] is not None
+
+
+@pytest.mark.integration
+def test_move_rolls_back_completely_when_the_engine_stays_unavailable(client):
+    # A real /new-game first (needs the real engine for setup); then the
+    # engine is swapped for one that fails every analyse() call, so the
+    # retry in _analyse_with_retry also fails -- design.md §9's "if it
+    # persists" path.
+    client.post("/new-game", json={"color": "white"})
+    fen_before = app.state.game.fen
+    ply_count_before = app.state.game.ply_count
+    mistake_counts_before = copy.deepcopy(app.state.mistake_counts)
+    history_before = list(app.state.assessment_history)
+    game_plan_before = app.state.game_plan
+
+    broken_engine = MagicMock()
+    broken_engine.analyse.side_effect = EngineUnavailable("boom")
+    app.state.engine = broken_engine
+
+    response = client.post("/move", json={"uci": "e2e4"})
+
+    assert response.status_code == 503
+    # Nothing partially applied: game, mistake_counts, assessment_history,
+    # and game_plan are all exactly what they were before the attempt.
+    assert app.state.game.fen == fen_before
+    assert app.state.game.ply_count == ply_count_before
+    assert app.state.mistake_counts == mistake_counts_before
+    assert app.state.assessment_history == history_before
+    assert app.state.game_plan == game_plan_before
 
 
 @pytest.mark.integration

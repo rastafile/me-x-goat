@@ -67,6 +67,13 @@ def _bare_engine(process: _FakeProcess) -> Engine:
     return engine
 
 
+def _bare_restartable_engine(process: _FakeProcess) -> Engine:
+    engine = _bare_engine(process)
+    engine._path = "stockfish"
+    engine._multipv = 5
+    return engine
+
+
 # 1. readline() instead of stdout iteration, EngineUnavailable on a closed pipe.
 
 
@@ -123,6 +130,36 @@ def test_close_kills_process_on_value_error():
     engine.close()
 
     assert process.kill_calls == 1
+
+
+# 2b. restart() -- session 8 of docs/week-4.md, design.md §9's crash
+# resilience row. subprocess.Popen is monkeypatched so this stays a unit
+# test, same spirit as the fake-pipe tests above -- no real process.
+
+
+def test_restart_closes_the_old_process_and_starts_a_fresh_one(monkeypatch):
+    old_process = _FakeProcess()
+    engine = _bare_restartable_engine(old_process)
+    new_process = _FakeProcess(stdout_lines=["uciok\n", "readyok\n"])
+    monkeypatch.setattr("src.engine.subprocess.Popen", lambda *args, **kwargs: new_process)
+
+    engine.restart()
+
+    assert old_process.wait_calls == 1  # close() ran on the old process
+    assert engine._process is new_process
+
+
+def test_restart_raises_engine_unavailable_if_the_fresh_process_cannot_start(monkeypatch):
+    old_process = _FakeProcess()
+    engine = _bare_restartable_engine(old_process)
+
+    def _raise_not_found(*args, **kwargs):
+        raise FileNotFoundError()
+
+    monkeypatch.setattr("src.engine.subprocess.Popen", _raise_not_found)
+
+    with pytest.raises(EngineUnavailable):
+        engine.restart()
 
 
 # 3. Analysis.loss_cp

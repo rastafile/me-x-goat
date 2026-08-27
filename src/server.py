@@ -154,9 +154,18 @@ def new_game(body: NewGameRequest) -> GameStateResponse:
 
     goat_move, analysis = None, None
     if not game.waiting_for_user:
-        goat_move, analysis = _play_goat_move(
-            game, app.state.engine, body.style, body.strength, app.state.language
-        )
+        try:
+            goat_move, analysis = _play_goat_move(
+                game, app.state.engine, body.style, body.strength, app.state.language
+            )
+        except EngineUnavailable as exc:
+            # game is freshly constructed and nothing's been pushed to it
+            # yet (_play_goat_move analyses before it ever pushes), so
+            # there's nothing to roll back here -- just a clear error
+            # instead of a plain 500.
+            raise HTTPException(
+                status_code=503, detail="the chess engine is unavailable; game not started"
+            ) from exc
         app.state.assessment_history.append(None)  # opening move, not assessed
         # A single opening move can never trigger a transition (queens_off
         # needs a capture, file_opens needs every pawn off a file, and
@@ -186,40 +195,61 @@ def make_move(body: MoveRequest) -> GameStateResponse:
     # reach the engine at all.
     fen_before_move = game.fen
     signature_before = game.phase_signature()
+    ply_count_before = game.ply_count
     try:
         game.push(body.uci)
     except IllegalMove as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
-    before = app.state.engine.analyse(fen_before_move, movetime_ms=_movetime_ms(app.state.strength))
     user_color = game.user_color
+    goat_move: GoatMove | None = None
+    analysis: Analysis | None = None
+    tutor_assessment: Assessment | None = None
+    goat_color: str | None = None
+    goat_assessment: Assessment | None = None
 
-    goat_move, analysis = None, None
-    if not game.is_over():
-        goat_move, analysis = _play_goat_move(
-            game, app.state.engine, app.state.style, app.state.strength, app.state.language
-        )
+    # Every Stockfish call for this round lives in this block, and nothing
+    # in it mutates assessment_history/mistake_counts/game_plan -- only
+    # local variables. That's what makes the except branch below a real
+    # rollback: if the engine is still unavailable after one restart+retry
+    # (design.md §9), popping game back to ply_count_before undoes 100% of
+    # what this request did, and nothing else needed undoing because
+    # nothing else was touched yet.
+    try:
+        before = _analyse_with_retry(app.state.engine, fen_before_move, _movetime_ms(app.state.strength))
 
-    # analysis is the opponent's analysis of the position the user's move
-    # left behind -- exactly the "after" half tutor.assess needs, already
-    # paid for by _play_goat_move above. None only when the user's own move
-    # ended the game, and there's nothing left to analyse.
-    tutor_assessment = None
-    if analysis is not None:
-        tutor_assessment = assess(before, body.uci, analysis, user_color)
-    _track_assessment(app.state.assessment_history, app.state.mistake_counts, user_color, tutor_assessment)
-
-    # The GOAT's own move gets the same treatment, for the "both sides"
-    # mistake count design.md asks for -- tutor.assess doesn't care whose
-    # move it classifies (ADR 4), so this is a policy choice, not a design
-    # change. Costs one further analyse() call, on the position after the
-    # GOAT's own reply.
-    if goat_move is not None:
-        goat_color = "black" if user_color == "white" else "white"
-        goat_assessment = None
         if not game.is_over():
-            after_goat = app.state.engine.analyse(game.fen, movetime_ms=_movetime_ms(app.state.strength))
-            goat_assessment = assess(analysis, goat_move.uci, after_goat, goat_color)
+            goat_move, analysis = _play_goat_move(
+                game, app.state.engine, app.state.style, app.state.strength, app.state.language
+            )
+
+        # analysis is the opponent's analysis of the position the user's
+        # move left behind -- exactly the "after" half tutor.assess needs,
+        # already paid for by _play_goat_move above. None only when the
+        # user's own move ended the game, and there's nothing left to
+        # analyse.
+        if analysis is not None:
+            tutor_assessment = assess(before, body.uci, analysis, user_color)
+
+        # The GOAT's own move gets the same treatment, for the "both sides"
+        # mistake count design.md asks for -- tutor.assess doesn't care
+        # whose move it classifies (ADR 4), so this is a policy choice, not
+        # a design change. Costs one further analyse() call, on the
+        # position after the GOAT's own reply.
+        if goat_move is not None:
+            goat_color = "black" if user_color == "white" else "white"
+            if not game.is_over():
+                after_goat = _analyse_with_retry(app.state.engine, game.fen, _movetime_ms(app.state.strength))
+                goat_assessment = assess(analysis, goat_move.uci, after_goat, goat_color)
+    except EngineUnavailable as exc:
+        while game.ply_count > ply_count_before:
+            game.pop()
+        raise HTTPException(
+            status_code=503, detail="the chess engine is unavailable; your move was not applied"
+        ) from exc
+
+    _track_assessment(app.state.assessment_history, app.state.mistake_counts, user_color, tutor_assessment)
+    if goat_move is not None:
         _track_assessment(app.state.assessment_history, app.state.mistake_counts, goat_color, goat_assessment)
 
     # Diffs the whole round (user's move plus the GOAT's reply, or just the
@@ -288,7 +318,7 @@ def get_pgn() -> PlainTextResponse:
 def _play_goat_move(
     game: Game, engine: Engine, style: str, strength: int, language: str
 ) -> tuple[GoatMove, Analysis]:
-    analysis = engine.analyse(game.fen, movetime_ms=_movetime_ms(strength))
+    analysis = _analyse_with_retry(engine, game.fen, _movetime_ms(strength))
     board_before = chess.Board(game.fen)
     result = choose(game.fen, analysis.candidates, style=style, strength=strength)
     game.push(result.move)
@@ -431,6 +461,23 @@ def _detect_transition(before: PhaseSignature, after: PhaseSignature) -> str | N
         if transition in fired:
             return transition
     return None
+
+
+def _analyse_with_retry(engine: Engine, fen: str, movetime_ms: int) -> Analysis:
+    """design.md §9's error-handling table: 'Stockfish crashes mid-game ->
+    restart the process and retry the analysis once. If it persists, warn
+    and pause.' The restart itself is Engine.restart()'s job (engine.py is
+    "the only boundary with Stockfish"); this is just the retry-once
+    policy, and it's pure -- any object with .analyse()/.restart() works,
+    so it's testable without a real subprocess. A second EngineUnavailable
+    propagates; callers are responsible for turning that into a clear
+    client-facing error and leaving no partially-applied state (make_move
+    pops back to ply_count_before)."""
+    try:
+        return engine.analyse(fen, movetime_ms=movetime_ms)
+    except EngineUnavailable:
+        engine.restart()
+        return engine.analyse(fen, movetime_ms=movetime_ms)
 
 
 def _mate_in_for_user(candidate: Candidate | None, user_color: str) -> int | None:
