@@ -1,4 +1,4 @@
-"""Sessions 2-3 of docs/week-4.md: coach.py's two voices.
+"""Sessions 2-3 and 7 of docs/week-4.md: coach.py's three voices.
 
 No test below the `integration` mark may make a real network call -- the
 Anthropic client is always mocked. The integration tests need a real
@@ -10,10 +10,10 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from src.coach import narrate_assessment, narrate_goat_move
+from src.coach import narrate_assessment, narrate_goat_move, narrate_transition
 from src.engine import Analysis, Candidate
 from src.game import Game
-from src.narration import describe_assessment, describe_move
+from src.narration import describe_assessment, describe_move, describe_transition
 from src.persona import Choice
 from src.tutor import Assessment
 
@@ -152,6 +152,51 @@ def test_real_api_call_for_the_tutor_voice_returns_nonempty_prose():
     blunder = _blunder()
 
     result = narrate_assessment(blunder, "en-US")
+
+    assert isinstance(result, str)
+    assert len(result) > 0
+
+
+def test_plan_voice_no_api_key_returns_the_grounding_text_without_calling_the_api(monkeypatch):
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+
+    with patch("src.coach.anthropic.Anthropic") as mock_anthropic:
+        result = narrate_transition("queens_off", "en-US")
+
+    mock_anthropic.assert_not_called()
+    assert result == describe_transition("queens_off", "en-US")
+
+
+def test_plan_voice_successful_api_call_returns_its_text_verbatim(monkeypatch):
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
+
+    with patch("src.coach.anthropic.Anthropic") as mock_anthropic:
+        mock_client = MagicMock()
+        mock_client.messages.create.return_value = _fake_response("Custom plan prose.")
+        mock_anthropic.return_value = mock_client
+
+        result = narrate_transition("file_opens", "en-US")
+
+    assert result == "Custom plan prose."
+
+
+def test_plan_voice_api_exception_falls_back_to_the_grounding_text_exactly(monkeypatch):
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
+
+    with patch("src.coach.anthropic.Anthropic") as mock_anthropic:
+        mock_client = MagicMock()
+        mock_client.messages.create.side_effect = RuntimeError("network exploded")
+        mock_anthropic.return_value = mock_client
+
+        result = narrate_transition("pawn_endgame_begins", "en-US")
+
+    assert result == describe_transition("pawn_endgame_begins", "en-US")
+
+
+@pytest.mark.integration
+@pytest.mark.skipif(not os.environ.get("ANTHROPIC_API_KEY"), reason="needs a real ANTHROPIC_API_KEY")
+def test_real_api_call_for_the_plan_voice_returns_nonempty_prose():
+    result = narrate_transition("queens_off", "en-US")
 
     assert isinstance(result, str)
     assert len(result) > 0

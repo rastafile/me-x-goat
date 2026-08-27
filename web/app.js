@@ -6,6 +6,7 @@ const START_FEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
 
 const statusEl = document.getElementById("status")
 const tutorPanelEl = document.getElementById("tutor-panel")
+const gamePlanPanelEl = document.getElementById("game-plan-panel")
 const mistakePanelEl = document.getElementById("mistake-panel")
 const summaryPanelEl = document.getElementById("summary-panel")
 const mateBadgeEl = document.getElementById("mate-badge")
@@ -307,6 +308,10 @@ function renderDynamicPanels(state) {
     renderSummary(state.summary)
     renderMateBadge(state.mate_in)
     renderEvalBar(state.evaluation, state.mate_in)
+    // game_plan is already narrated server-side (coach.py), same as the
+    // GOAT's and the tutor's own text -- a plain passthrough, no template.
+    // null until the first structural transition fires (design.md §5).
+    gamePlanPanelEl.textContent = state.game_plan || ""
 }
 
 function renderMateBadge(mateIn) {

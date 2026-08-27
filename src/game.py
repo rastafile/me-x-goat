@@ -1,6 +1,7 @@
 """Game state. Wraps python-chess; nothing else touches the board."""
 
 import random
+from dataclasses import dataclass
 
 import chess
 import chess.pgn
@@ -8,6 +9,19 @@ import chess.pgn
 
 class IllegalMove(Exception):
     pass
+
+
+@dataclass(frozen=True)
+class PhaseSignature:
+    """Structural facts about a position, not the position itself -- for
+    detecting design.md §5's game-plan transitions (queens off, a file
+    opens, an endgame begins) by diffing two of these. Computed here, not
+    in server.py: game.py is the only module that touches the board
+    (docs/decisions.md ADR 8)."""
+
+    queens_on_board: int
+    open_files: frozenset[int]  # file indices 0-7 with no pawn of either color
+    is_pawn_endgame: bool  # only kings and pawns remain, for both sides
 
 
 class Game:
@@ -66,3 +80,21 @@ class Game:
 
     def pgn(self) -> str:
         return str(chess.pgn.Game.from_board(self._board))
+
+    def phase_signature(self) -> PhaseSignature:
+        board = self._board
+        queens = len(board.pieces(chess.QUEEN, chess.WHITE)) + len(board.pieces(chess.QUEEN, chess.BLACK))
+
+        pawns = board.pieces(chess.PAWN, chess.WHITE) | board.pieces(chess.PAWN, chess.BLACK)
+        pawn_files = {chess.square_file(square) for square in pawns}
+        open_files = frozenset(file for file in range(8) if file not in pawn_files)
+
+        non_king_pawn_pieces = [
+            piece for piece in board.piece_map().values() if piece.piece_type not in (chess.KING, chess.PAWN)
+        ]
+
+        return PhaseSignature(
+            queens_on_board=queens,
+            open_files=open_files,
+            is_pawn_endgame=not non_king_pawn_pieces,
+        )

@@ -13,9 +13,17 @@ import pytest
 from fastapi.testclient import TestClient
 
 from src.engine import Candidate, EngineUnavailable
-from src.game import Game
+from src.game import Game, PhaseSignature
 from src.narration import DEFAULT_LANGUAGE
-from src.server import _evaluation_for_user, _fresh_mistake_counts, _mate_in_for_user, _summary, _track_assessment, app
+from src.server import (
+    _detect_transition,
+    _evaluation_for_user,
+    _fresh_mistake_counts,
+    _mate_in_for_user,
+    _summary,
+    _track_assessment,
+    app,
+)
 from src.tutor import Assessment
 
 START_FEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
@@ -23,6 +31,9 @@ WHITE_MATE_IN_1_FEN = "6k1/5ppp/8/8/8/8/5PPP/4R1K1 w - - 0 1"
 # White to move, but already doomed -- black's rooks force mate in 1
 # regardless of white's reply.
 WHITE_MATED_IN_1_FEN = "K7/8/1k6/8/8/8/8/r6r w - - 0 1"
+# White's queen can capture black's undefended queen on the a-file --
+# queens_on_board drops from 2 to 1, firing "queens_off".
+QUEEN_CAPTURE_AVAILABLE_FEN = "q3k3/8/8/8/8/8/8/Q3K3 w - - 0 1"
 # Fool's mate's final position -- an already-delivered checkmate, so
 # Game(fen=...).is_over() is True with zero moves needed to get there.
 CHECKMATED_FEN = "rnb1kbnr/pppp1ppp/8/4p3/6Pq/5P2/PPPPP2P/RNBQKBNR w KQkq - 1 3"
@@ -76,6 +87,59 @@ def test_mate_in_for_user_is_none_without_a_candidate():
 
 def test_evaluation_for_user_is_none_without_a_candidate():
     assert _evaluation_for_user(None, "white") is None
+
+
+def _signature(queens: int = 2, open_files: frozenset[int] = frozenset(), pawn_endgame: bool = False) -> PhaseSignature:
+    return PhaseSignature(queens_on_board=queens, open_files=open_files, is_pawn_endgame=pawn_endgame)
+
+
+def test_detect_transition_is_none_when_nothing_changed():
+    before = _signature()
+    after = _signature()
+
+    assert _detect_transition(before, after) is None
+
+
+def test_detect_transition_fires_queens_off_on_any_decrease():
+    before = _signature(queens=2)
+    after = _signature(queens=1)
+
+    assert _detect_transition(before, after) == "queens_off"
+
+
+def test_detect_transition_does_not_fire_queens_off_when_queens_increase_or_stay():
+    # Can't really increase in a real game, but the comparison itself
+    # shouldn't fire on anything but a decrease.
+    assert _detect_transition(_signature(queens=1), _signature(queens=1)) is None
+    assert _detect_transition(_signature(queens=1), _signature(queens=2)) is None
+
+
+def test_detect_transition_fires_file_opens_on_a_newly_pawnless_file():
+    before = _signature(open_files=frozenset({0}))
+    after = _signature(open_files=frozenset({0, 4}))
+
+    assert _detect_transition(before, after) == "file_opens"
+
+
+def test_detect_transition_fires_pawn_endgame_begins_on_the_first_entry():
+    before = _signature(pawn_endgame=False)
+    after = _signature(pawn_endgame=True)
+
+    assert _detect_transition(before, after) == "pawn_endgame_begins"
+
+
+def test_detect_transition_does_not_refire_pawn_endgame_once_already_in_one():
+    before = _signature(pawn_endgame=True)
+    after = _signature(pawn_endgame=True)
+
+    assert _detect_transition(before, after) is None
+
+
+def test_detect_transition_prioritizes_pawn_endgame_over_queens_off_and_file_opens():
+    before = _signature(queens=1, open_files=frozenset(), pawn_endgame=False)
+    after = _signature(queens=0, open_files=frozenset({4}), pawn_endgame=True)
+
+    assert _detect_transition(before, after) == "pawn_endgame_begins"
     assert _evaluation_for_user(None, "black") is None
 
 
@@ -230,6 +294,40 @@ def test_mate_in_is_negative_when_the_user_is_left_facing_a_forced_mate(client):
 
     assert response.json()["mate_in"] is not None
     assert response.json()["mate_in"] < 0
+
+
+@pytest.mark.integration
+def test_game_plan_is_null_until_the_first_transition(client):
+    client.post("/new-game", json={"color": "white"})
+
+    assert client.post("/move", json={"uci": "e2e4"}).json()["game_plan"] is None
+
+
+@pytest.mark.integration
+def test_game_plan_updates_when_a_queen_capture_fires_queens_off(client):
+    client.post("/new-game", json={"color": "white"})
+    app.state.game = Game(user_color="white", fen=QUEEN_CAPTURE_AVAILABLE_FEN)
+
+    response = client.post("/move", json={"uci": "a1a8"})
+
+    assert response.json()["game_plan"] is not None
+
+
+@pytest.mark.integration
+def test_game_plan_persists_unchanged_across_a_move_with_no_transition(client):
+    client.post("/new-game", json={"color": "white"})
+    app.state.game = Game(user_color="white", fen=QUEEN_CAPTURE_AVAILABLE_FEN)
+    first = client.post("/move", json={"uci": "a1a8"}).json()
+    assert first["game_plan"] is not None
+
+    # After Qxa8+, black's only legal replies are king moves -- no pawns
+    # exist on this board at all, so no file can newly become pawnless,
+    # and white's queen (still on board) rules out a pawn endgame either
+    # way. Whichever legal move comes next shouldn't touch the plan text.
+    next_move = first["legal_moves"][0]
+    second = client.post("/move", json={"uci": next_move}).json()
+
+    assert second["game_plan"] == first["game_plan"]
 
 
 @pytest.mark.integration

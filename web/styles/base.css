@@ -58,6 +58,24 @@ body {
   display: none;
 }
 
+/* Third voice/area, distinct from both #status (the GOAT's) and
+   #tutor-panel (the tutor's) -- design.md §5's persistent game plan.
+   Italic and calmer than either: ambient context, not a reaction to the
+   last move. */
+#game-plan-panel {
+  min-height: 1em;
+  margin: 0.5rem 0;
+  padding: 0.5rem 0.75rem;
+  border-left: 4px solid #2f7d6b;
+  background: rgba(47, 125, 107, 0.08);
+  font-style: italic;
+  white-space: pre-line;
+}
+
+#game-plan-panel:empty {
+  display: none;
+}
+
 #new-game-panel {
   display: flex;
   flex-direction: column;

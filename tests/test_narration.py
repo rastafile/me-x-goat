@@ -1,6 +1,6 @@
 from src.engine import Analysis, Candidate
 from src.game import Game
-from src.narration import DEFAULT_LANGUAGE, LANGUAGES, describe_assessment, describe_move
+from src.narration import DEFAULT_LANGUAGE, LANGUAGES, describe_assessment, describe_move, describe_transition
 from src.persona import Choice
 from src.tutor import Assessment
 
@@ -212,3 +212,17 @@ def test_describe_assessment_falls_back_to_the_default_language():
     assessment = Assessment(classification="good", loss_cp=10, best_move=None, continuation=[], offer_take_back=False)
 
     assert describe_assessment(assessment, "fr-FR") == describe_assessment(assessment, DEFAULT_LANGUAGE)
+
+
+def test_describe_transition_has_a_phrase_for_each_transition_in_both_languages():
+    for transition in ("queens_off", "file_opens", "pawn_endgame_begins"):
+        en = describe_transition(transition, "en-US")
+        pt = describe_transition(transition, "pt-BR")
+
+        assert en and isinstance(en, str)
+        assert pt and isinstance(pt, str)
+        assert en != pt
+
+
+def test_describe_transition_falls_back_to_the_default_language():
+    assert describe_transition("queens_off", "fr-FR") == describe_transition("queens_off", DEFAULT_LANGUAGE)

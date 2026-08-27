@@ -7,7 +7,8 @@ ever block a game on network availability.
 
 Wraps narration.py's *output*, not persona.py's or tutor.py's raw data, on
 purpose -- see docs/decisions.md ADR 7. narrate_goat_move is the opponent's
-voice; narrate_assessment is the tutor's.
+voice; narrate_assessment is the tutor's; narrate_transition is the game
+plan's (design.md §5).
 """
 
 import os
@@ -16,7 +17,7 @@ import anthropic
 
 from src.engine import Analysis
 from src.game import Game
-from src.narration import describe_assessment, describe_move
+from src.narration import describe_assessment, describe_move, describe_transition
 from src.persona import Choice
 from src.tutor import Assessment
 
@@ -38,6 +39,13 @@ _TUTOR_SYSTEM_PROMPT = (
     "square, or move name that isn't already in the note. If the note ends in a question (an "
     "offer to take the move back), keep it as a question at the end."
 )
+_PLAN_SYSTEM_PROMPT = (
+    "You are a chess commentator describing a shift in the character of the game to a student, "
+    "in the third person, neutral and analytical -- not addressing anyone directly. Rewrite the "
+    "note you're given into one or two natural sentences in {language}. You may only change how "
+    "it's said, never what it says: do not add a chess claim, reason, square, or move name that "
+    "isn't already in the note."
+)
 
 
 def narrate_goat_move(analysis: Analysis, choice: Choice, game: Game, language: str) -> str:
@@ -53,6 +61,12 @@ def narrate_assessment(assessment: Assessment, language: str) -> str:
     """Same shape as narrate_goat_move, for the tutor's voice instead."""
     grounding = describe_assessment(assessment, language)
     return _narrate(grounding, language, _TUTOR_SYSTEM_PROMPT)
+
+
+def narrate_transition(transition: str, language: str) -> str:
+    """Same shape again, for the game plan's voice."""
+    grounding = describe_transition(transition, language)
+    return _narrate(grounding, language, _PLAN_SYSTEM_PROMPT)
 
 
 def _narrate(grounding: str, language: str, system_prompt: str) -> str:

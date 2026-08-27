@@ -18,9 +18,9 @@ from fastapi.responses import FileResponse, PlainTextResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
-from src.coach import narrate_assessment, narrate_goat_move
+from src.coach import narrate_assessment, narrate_goat_move, narrate_transition
 from src.engine import Analysis, Candidate, Engine, EngineUnavailable
-from src.game import Game, IllegalMove
+from src.game import Game, IllegalMove, PhaseSignature
 from src.narration import DEFAULT_LANGUAGE, LANGUAGES
 from src.persona import choose
 from src.tutor import Assessment, assess
@@ -95,6 +95,7 @@ class GameStateResponse(BaseModel):
     summary: SummaryResponse | None
     evaluation: int | None
     mate_in: int | None
+    game_plan: str | None
     is_over: bool
     outcome: str | None
 
@@ -115,6 +116,11 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.strength = 1400
     app.state.language = DEFAULT_LANGUAGE
     app.state.mistake_counts = _fresh_mistake_counts()
+    # design.md §5: rewritten only on a structural transition (session 7 of
+    # docs/week-4.md); persists across every move that doesn't trigger one.
+    # Not undone on /take-back -- deliberately out of scope for now, see
+    # docs/decisions.md ADR 8's "Known limitation".
+    app.state.game_plan = None
     # One entry per ply ever pushed via /move (both the user's and the
     # GOAT's), kept in lockstep with game.ply_count -- (color, Assessment)
     # when the ply was actually assessed, None otherwise (the opening move
@@ -144,6 +150,7 @@ def new_game(body: NewGameRequest) -> GameStateResponse:
     app.state.language = body.language if body.language in LANGUAGES else DEFAULT_LANGUAGE
     app.state.mistake_counts = _fresh_mistake_counts()
     app.state.assessment_history = []
+    app.state.game_plan = None
 
     goat_move, analysis = None, None
     if not game.waiting_for_user:
@@ -151,6 +158,10 @@ def new_game(body: NewGameRequest) -> GameStateResponse:
             game, app.state.engine, body.style, body.strength, app.state.language
         )
         app.state.assessment_history.append(None)  # opening move, not assessed
+        # A single opening move can never trigger a transition (queens_off
+        # needs a capture, file_opens needs every pawn off a file, and
+        # pawn_endgame_begins needs non-king/pawn pieces gone -- none
+        # possible on move 1), so no _detect_transition call here.
 
     return _state_response(
         game,
@@ -160,6 +171,7 @@ def new_game(body: NewGameRequest) -> GameStateResponse:
         mistake_counts=app.state.mistake_counts,
         assessment_history=app.state.assessment_history,
         language=app.state.language,
+        game_plan=app.state.game_plan,
     )
 
 
@@ -173,6 +185,7 @@ def make_move(body: MoveRequest) -> GameStateResponse:
     # an analyse() call (not cheap) on it -- an illegal move should never
     # reach the engine at all.
     fen_before_move = game.fen
+    signature_before = game.phase_signature()
     try:
         game.push(body.uci)
     except IllegalMove as exc:
@@ -209,6 +222,16 @@ def make_move(body: MoveRequest) -> GameStateResponse:
             goat_assessment = assess(analysis, goat_move.uci, after_goat, goat_color)
         _track_assessment(app.state.assessment_history, app.state.mistake_counts, goat_color, goat_assessment)
 
+    # Diffs the whole round (user's move plus the GOAT's reply, or just the
+    # user's move if it ended the game) against the position before it --
+    # one plan update per round at most, per design.md §5 ("rewritten only
+    # when the nature of the position changes"). Only one entry's worth
+    # of history is unrolled here, so game.phase_signature() (not
+    # server.py) is what actually touches the board -- see ADR 8.
+    transition = _detect_transition(signature_before, game.phase_signature())
+    if transition is not None:
+        app.state.game_plan = narrate_transition(transition, app.state.language)
+
     return _state_response(
         game,
         goat_move,
@@ -217,6 +240,7 @@ def make_move(body: MoveRequest) -> GameStateResponse:
         mistake_counts=app.state.mistake_counts,
         assessment_history=app.state.assessment_history,
         language=app.state.language,
+        game_plan=app.state.game_plan,
     )
 
 
@@ -249,6 +273,7 @@ def take_back() -> GameStateResponse:
         mistake_counts=app.state.mistake_counts,
         assessment_history=app.state.assessment_history,
         language=app.state.language,
+        game_plan=app.state.game_plan,
     )
 
 
@@ -342,6 +367,7 @@ def _state_response(
     mistake_counts: dict[str, dict[str, int]],
     assessment_history: list[tuple[str, Assessment] | None],
     language: str,
+    game_plan: str | None,
 ) -> GameStateResponse:
     top_candidate: Candidate | None = None
     if analysis is not None and analysis.candidates:
@@ -368,6 +394,7 @@ def _state_response(
         summary=_summary(game, assessment_history, mistake_counts),
         evaluation=_evaluation_for_user(top_candidate, game.user_color),
         mate_in=_mate_in_for_user(top_candidate, game.user_color),
+        game_plan=game_plan,
         is_over=game.is_over(),
         outcome=game.outcome(),
     )
@@ -377,6 +404,33 @@ def _evaluation_for_user(candidate: Candidate | None, user_color: str) -> int | 
     if candidate is None or candidate.score_cp is None:
         return None
     return candidate.score_cp if user_color == "white" else -candidate.score_cp
+
+
+# Priority when more than one fires in the same round (rare -- e.g. the
+# last non-king/pawn piece trade also happens to open a file). One plan
+# update per round, per design.md §5 ("rewritten only when..."), so pick
+# whichever is structurally the biggest deal.
+_TRANSITION_PRIORITY = ("pawn_endgame_begins", "queens_off", "file_opens")
+
+
+def _detect_transition(before: PhaseSignature, after: PhaseSignature) -> str | None:
+    """Which of design.md §5's game-plan triggers fired between two
+    snapshots, if any. Pure orchestration over facts game.py already
+    computed (plain ints/frozensets) -- this never touches python-chess or
+    a board directly, so it doesn't break "no chess logic lives here"
+    (docs/decisions.md ADR 8)."""
+    fired = set()
+    if not before.is_pawn_endgame and after.is_pawn_endgame:
+        fired.add("pawn_endgame_begins")
+    if after.queens_on_board < before.queens_on_board:
+        fired.add("queens_off")
+    if after.open_files - before.open_files:
+        fired.add("file_opens")
+
+    for transition in _TRANSITION_PRIORITY:
+        if transition in fired:
+            return transition
+    return None
 
 
 def _mate_in_for_user(candidate: Candidate | None, user_color: str) -> int | None:
