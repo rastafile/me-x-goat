@@ -47,23 +47,40 @@ class Analysis:
 
 class Engine:
     def __init__(self, path: str = "stockfish", multipv: int = 5) -> None:
+        self._path = path
         self._multipv = multipv
+        self._start()
+
+    def _start(self) -> None:
         try:
             self._process = subprocess.Popen(
-                [path],
+                [self._path],
                 stdin=subprocess.PIPE,
                 stdout=subprocess.PIPE,
                 text=True,
                 bufsize=1,
             )
         except FileNotFoundError as exc:
-            raise EngineUnavailable(f"stockfish binary not found: {path!r}") from exc
+            raise EngineUnavailable(f"stockfish binary not found: {self._path!r}") from exc
 
         self._send("uci")
         self._wait_for("uciok")
-        self._send(f"setoption name MultiPV value {multipv}")
+        self._send(f"setoption name MultiPV value {self._multipv}")
         self._send("isready")
         self._wait_for("readyok")
+
+    def restart(self) -> None:
+        """design.md §9: 'Stockfish crashes mid-game -> restart the process
+        and retry the analysis once.' Closes whatever's left of the old
+        process (best-effort -- close() already tolerates one that's
+        already dead or unresponsive) and starts a fresh one via the same
+        path _start() already uses, in place: callers holding a reference
+        to this Engine automatically get the new process, no reassignment
+        needed anywhere. Raises EngineUnavailable itself if the fresh
+        process can't start either -- that's "if it persists" for the
+        caller to handle."""
+        self.close()
+        self._start()
 
     def analyse(self, fen: str, movetime_ms: int) -> Analysis:
         """Run a fixed-time search and return the candidates, best to worst.
