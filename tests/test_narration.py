@@ -1,7 +1,8 @@
 from src.engine import Analysis, Candidate
 from src.game import Game
-from src.narration import DEFAULT_LANGUAGE, LANGUAGES, describe_move
+from src.narration import DEFAULT_LANGUAGE, LANGUAGES, describe_assessment, describe_move
 from src.persona import Choice
+from src.tutor import Assessment
 
 WHITE_TO_MOVE_FEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
 WHITE_MATE_IN_1_FEN = "6k1/5ppp/8/8/8/8/5PPP/4R1K1 w - - 0 1"
@@ -155,3 +156,59 @@ def test_unknown_language_falls_back_to_the_default():
 
 def test_languages_constant_includes_the_default():
     assert DEFAULT_LANGUAGE in LANGUAGES
+
+
+def test_excellent_and_good_get_one_line_in_both_languages():
+    excellent = Assessment(classification="excellent", loss_cp=0, best_move=None, continuation=[], offer_take_back=False)
+    good = Assessment(classification="good", loss_cp=20, best_move=None, continuation=[], offer_take_back=False)
+
+    assert describe_assessment(excellent, "en-US") == "Excellent move."
+    assert describe_assessment(excellent, "pt-BR") == "Lance excelente."
+    assert describe_assessment(good, "en-US") == "Good move."
+    assert describe_assessment(good, "pt-BR") == "Bom lance."
+
+
+def test_mistake_states_the_loss_and_the_stronger_alternative():
+    assessment = Assessment(
+        classification="mistake", loss_cp=150, best_move="e2e4", continuation=["e2e4", "e7e5"], offer_take_back=False
+    )
+
+    en = describe_assessment(assessment, "en-US")
+    pt = describe_assessment(assessment, "pt-BR")
+
+    assert en == (
+        "That's a mistake -- you gave up about 150 centipawns.\n"
+        "The stronger try was e2e4.\n"
+        "From there, it likely continues e2e4 e7e5."
+    )
+    assert pt == (
+        "Isso é um erro -- você perdeu cerca de 150 centipeões.\n"
+        "A tentativa mais forte era e2e4.\n"
+        "A partir daí, provavelmente segue e2e4 e7e5."
+    )
+
+
+def test_blunder_offers_the_take_back_last():
+    assessment = Assessment(
+        classification="blunder", loss_cp=650, best_move="e2e4", continuation=["e2e4"], offer_take_back=True
+    )
+
+    en = describe_assessment(assessment, "en-US")
+    pt = describe_assessment(assessment, "pt-BR")
+
+    assert en.endswith("Want to take that back?")
+    assert pt.endswith("Quer desfazer esse lance?")
+
+
+def test_inaccuracy_never_offers_a_take_back():
+    assessment = Assessment(
+        classification="inaccuracy", loss_cp=60, best_move="e2e4", continuation=["e2e4"], offer_take_back=False
+    )
+
+    assert "?" not in describe_assessment(assessment, "en-US")
+
+
+def test_describe_assessment_falls_back_to_the_default_language():
+    assessment = Assessment(classification="good", loss_cp=10, best_move=None, continuation=[], offer_take_back=False)
+
+    assert describe_assessment(assessment, "fr-FR") == describe_assessment(assessment, DEFAULT_LANGUAGE)

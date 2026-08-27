@@ -1,7 +1,8 @@
-"""Builds the opponent's own commentary from tags and numbers -- no model,
-no network, no API. This is the degraded-mode text design.md #9 requires
-when narration is unavailable; coach.py wraps this with the model in week 4
-and falls back to it on failure.
+"""Builds both voices' commentary from tags and numbers -- no model, no
+network, no API. This is the degraded-mode text design.md #9 requires when
+narration is unavailable; coach.py wraps this with the model in week 4 and
+falls back to it on failure. describe_move is the opponent's voice;
+describe_assessment is the tutor's.
 
 Every phrase table is keyed by language first, same convention as
 web/i18n.js: no user-facing string lives in a single language anywhere in
@@ -14,6 +15,7 @@ import math
 from src.engine import Analysis
 from src.game import Game
 from src.persona import WEIGHTS, Choice
+from src.tutor import Assessment
 
 DEFAULT_LANGUAGE = "en-US"
 LANGUAGES = ("en-US", "pt-BR")
@@ -73,6 +75,49 @@ _NEGATIVE_EVAL_PHRASE: dict[str, str] = {
 # it needs to outrank everything when picking which fired tag leads.
 _LEAD_WEIGHTS: dict[str, float] = {**WEIGHTS, "forced_mate": math.inf}
 
+# design.md §6's asymmetric commentary rule: good moves get one line (or
+# silence -- here, still one short line, since AssessmentResponse.commentary
+# is never None while tutor itself is populated).
+_CLASSIFICATION_LINE: dict[str, dict[str, str]] = {
+    "en-US": {
+        "excellent": "Excellent move.",
+        "good": "Good move.",
+    },
+    "pt-BR": {
+        "excellent": "Lance excelente.",
+        "good": "Bom lance.",
+    },
+}
+
+_MISTAKE_LEAD: dict[str, dict[str, str]] = {
+    "en-US": {
+        "inaccuracy": "That's an inaccuracy",
+        "mistake": "That's a mistake",
+        "blunder": "That's a blunder",
+    },
+    "pt-BR": {
+        "inaccuracy": "Isso é uma imprecisão",
+        "mistake": "Isso é um erro",
+        "blunder": "Isso é um erro grave",
+    },
+}
+_LOSS_PHRASE: dict[str, str] = {
+    "en-US": " -- you gave up about {loss_cp} centipawns.",
+    "pt-BR": " -- você perdeu cerca de {loss_cp} centipeões.",
+}
+_BETTER_PHRASE: dict[str, str] = {
+    "en-US": "The stronger try was {best_move}.",
+    "pt-BR": "A tentativa mais forte era {best_move}.",
+}
+_CONTINUATION_PHRASE: dict[str, str] = {
+    "en-US": "From there, it likely continues {continuation}.",
+    "pt-BR": "A partir daí, provavelmente segue {continuation}.",
+}
+_TAKE_BACK_OFFER: dict[str, str] = {
+    "en-US": "Want to take that back?",
+    "pt-BR": "Quer desfazer esse lance?",
+}
+
 
 def describe_move(analysis: Analysis, choice: Choice, game: Game, language: str) -> str:
     """At most two lines, first person, as the opponent. `game` reflects the
@@ -112,3 +157,29 @@ def _evaluation_line(analysis: Analysis, move: str, user_color: str, language: s
     if user_cp > 0:
         return _POSITIVE_EVAL_PHRASE[language]
     return _NEGATIVE_EVAL_PHRASE[language]
+
+
+def describe_assessment(assessment: Assessment, language: str) -> str:
+    """The tutor's voice, second person, addressed to whoever made the move.
+    One line for excellent/good. For inaccuracy/mistake/blunder: what was
+    lost, the stronger alternative, the likely continuation, and (blunder
+    only) the take-back offer -- design.md §6's asymmetric commentary rule.
+
+    No mover_color parameter: assessment.loss_cp/best_move/continuation are
+    already oriented from the mover's own point of view (tutor.assess's own
+    contract), so nothing here needs to know which color that was.
+    """
+    lang = language if language in LANGUAGES else DEFAULT_LANGUAGE
+
+    if assessment.classification in ("excellent", "good"):
+        return _CLASSIFICATION_LINE[lang][assessment.classification]
+
+    lines = [_MISTAKE_LEAD[lang][assessment.classification] + _LOSS_PHRASE[lang].format(loss_cp=assessment.loss_cp)]
+    if assessment.best_move is not None:
+        lines.append(_BETTER_PHRASE[lang].format(best_move=assessment.best_move))
+    if assessment.continuation:
+        lines.append(_CONTINUATION_PHRASE[lang].format(continuation=" ".join(assessment.continuation)))
+    if assessment.offer_take_back:
+        lines.append(_TAKE_BACK_OFFER[lang])
+
+    return "\n".join(lines)
