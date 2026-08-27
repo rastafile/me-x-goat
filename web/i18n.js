@@ -1,11 +1,18 @@
-// All user-facing text the page can show, in both directions -- per
+// All user-facing text the page assembles itself, in both directions -- per
 // CLAUDE.md: "Text shown to the end user is controlled by the
 // OUTPUT_LANGUAGE setting... Do not hardcode user-facing strings in any
-// single language." Nothing here talks to the server: the server only ever
-// returns structured data (classification words, cp numbers, UCI/SAN moves,
-// an outcome enum) -- every sentence the user reads is assembled client-side,
-// so translation lives entirely in this module. app.js never contains a
-// hardcoded user-facing string; it always goes through t().
+// single language." app.js never contains a hardcoded user-facing string;
+// it always goes through t() or a data-i18n label.
+//
+// As of docs/week-4.md session 4, the GOAT's and the tutor's own sentences
+// are no longer built here -- coach.py/narration.py narrate those
+// server-side now, in the requested language, and app.js just displays
+// state.goat_move.commentary / state.tutor.commentary verbatim. What's left
+// in this module is: static UI labels (buttons, dropdowns), the mistake
+// counts and end-of-game summary (still server-structured numbers, no prose
+// from coach.py this week), and the one status line the server can't
+// narrate -- the outcome phrase for a game the user's own move ended,
+// where there's no GOAT reply to carry it.
 //
 // Chess notation (UCI, SAN) is never translated -- it's already universal.
 // The two <option> labels naming the languages themselves ("English",
@@ -35,24 +42,13 @@ const STRINGS = {
         themeHighContrast: "High contrast",
         takeBack: "Take back",
         exportPgn: "Export PGN",
-        goatPlays: (san) => `GOAT plays ${san}`,
         gameOver: (outcome) => `Game over: ${outcome}`,
         evaluation: (value) => `Evaluation: ${value > 0 ? "+" : ""}${value}`,
-        tutorLine: (classification, lossCp) => `Tutor: ${classification} (${lossCp} cp lost)`,
-        betterWas: (move) => `Better was ${move}`,
-        likelyContinuation: (moves) => `Likely continuation: ${moves}`,
         takeThatBack: "Take that back",
         mistakeCountsLine: (label, side) =>
             `${label}: ${side.inaccuracy} inaccuracies, ${side.mistake} mistakes, ${side.blunder} blunders`,
         summaryLine: (ply, colorLabel, lossCp) =>
             `Game decided at ply ${ply}, by ${colorLabel}'s move (${lossCp} cp lost).`,
-        classification: {
-            excellent: "excellent",
-            good: "good",
-            inaccuracy: "inaccuracy",
-            mistake: "mistake",
-            blunder: "blunder",
-        },
         outcome: {
             checkmate: "checkmate",
             stalemate: "stalemate",
@@ -81,24 +77,13 @@ const STRINGS = {
         themeHighContrast: "Alto contraste",
         takeBack: "Desfazer",
         exportPgn: "Exportar PGN",
-        goatPlays: (san) => `GOAT joga ${san}`,
         gameOver: (outcome) => `Fim de jogo: ${outcome}`,
         evaluation: (value) => `Avaliação: ${value > 0 ? "+" : ""}${value}`,
-        tutorLine: (classification, lossCp) => `Tutor: ${classification} (${lossCp} cp perdidos)`,
-        betterWas: (move) => `Melhor seria ${move}`,
-        likelyContinuation: (moves) => `Continuação provável: ${moves}`,
         takeThatBack: "Desfazer esse lance",
         mistakeCountsLine: (label, side) =>
             `${label}: ${side.inaccuracy} imprecisões, ${side.mistake} erros, ${side.blunder} erros graves`,
         summaryLine: (ply, colorLabel, lossCp) =>
             `Partida decidida no lance ${ply}, pelo lance das ${colorLabel} (${lossCp} cp perdidos).`,
-        classification: {
-            excellent: "excelente",
-            good: "bom",
-            inaccuracy: "imprecisão",
-            mistake: "erro",
-            blunder: "erro grave",
-        },
         outcome: {
             checkmate: "xeque-mate",
             stalemate: "afogamento",
