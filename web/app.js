@@ -224,9 +224,16 @@ function renderDynamicPanels(state) {
 
     const lines = []
     if (state.goat_move) {
-        lines.push(strings.goatPlays(state.goat_move.san))
-    }
-    if (state.is_over) {
+        // goat_move.commentary is already narrated server-side (coach.py),
+        // in the requested language, and already covers the outcome phrase
+        // too when the GOAT's own move ends the game (narration.py) -- the
+        // move itself (SAN) stays visible alongside it, just not as the
+        // whole message (docs/week-4.md session 4 contract).
+        lines.push(state.goat_move.san)
+        lines.push(state.goat_move.commentary)
+    } else if (state.is_over) {
+        // The user's own move ended the game -- no GOAT reply narrates it,
+        // so this is the one status line still assembled client-side.
         lines.push(strings.gameOver(strings.outcome[state.outcome] ?? state.outcome))
     } else if (typeof state.evaluation === "number") {
         lines.push(strings.evaluation(state.evaluation))
@@ -247,31 +254,25 @@ function renderTutor(tutor) {
         return
     }
 
-    const strings = t()
-    const classification = strings.classification[tutor.classification] ?? tutor.classification
-    const lines = [strings.tutorLine(classification, tutor.loss_cp)]
-    if (tutor.best_move) {
-        lines.push(strings.betterWas(tutor.best_move))
-    }
-    if (tutor.continuation.length > 0) {
-        lines.push(strings.likelyContinuation(tutor.continuation.join(" ")))
-    }
-    // Plain UCI for now, not narrated text -- narration is week 4
-    // (docs/week-3.md session 5 contract).
+    // tutor.commentary is already narrated server-side (coach.py), in the
+    // requested language -- classification, best_move, and continuation are
+    // still on the response for anything that wants the raw numbers, but
+    // the panel itself just shows the sentence now.
     // A real element, not a bare text node: a node appended straight after
     // plain text doesn't reliably start its own line (the take-back button
     // was rendering squeezed onto the text's last line instead of below it).
     const text = document.createElement("p")
-    text.textContent = lines.join("\n")
+    text.textContent = tutor.commentary
     tutorPanelEl.appendChild(text)
 
-    // The take-back offer is appended last, after the rest of the analysis
-    // text is already in place, per design.md §6's ordering rule ("always
-    // after the explanation").
+    // The take-back button is a UI control, not narrated prose -- it keys
+    // off offer_take_back (a boolean), not off any text, and is appended
+    // last, after the commentary is already in place, per design.md §6's
+    // ordering rule ("always after the explanation").
     if (tutor.offer_take_back) {
         const offer = document.createElement("button")
         offer.type = "button"
-        offer.textContent = strings.takeThatBack
+        offer.textContent = t().takeThatBack
         offer.addEventListener("click", takeBack)
         tutorPanelEl.appendChild(offer)
     }
