@@ -62,6 +62,8 @@ body {
   max-width: 480px;
   margin: 2rem auto;
   padding: 0 1rem;
+  background: var(--surface);
+  color: var(--on-surface);
 }
 
 #board-row {
@@ -135,14 +137,186 @@ body {
   display: none;
 }
 
-#new-game-panel {
+/* docs/week-5.md session 1: a slim header, title centered between an
+   invisible spacer (left) and the one settings trigger (right), so
+   removing/adding an icon on one side never re-centers the title. */
+#app-header {
   display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-  margin: 0.5rem 0;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.5rem 0;
 }
 
-#new-game-panel > div,
+#app-header h1 {
+  font-family: var(--font-serif);
+  font-size: 1.25rem;
+  font-weight: 400;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  text-align: center;
+  margin: 0;
+}
+
+.header-spacer,
+#settings-toggle {
+  width: 2.25rem;
+  height: 2.25rem;
+  flex-shrink: 0;
+}
+
+#settings-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  border: none;
+  color: var(--on-surface-variant);
+  cursor: pointer;
+  padding: 0;
+  border-radius: 0.25rem;
+}
+
+#settings-toggle:hover {
+  color: var(--on-surface);
+}
+
+/* Collapsed by default, revealed by #settings-toggle. Pushes the page
+   down rather than overlaying it -- no scrim, same quiet surface as
+   everything else, not a modal floating above it. */
+#settings-panel {
+  max-height: 0;
+  overflow: hidden;
+  transition: max-height 0.25s ease;
+}
+
+#settings-panel.open {
+  max-height: 32rem;
+}
+
+.settings-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.85rem 0;
+  border-bottom: 1px solid var(--outline-variant);
+}
+
+.settings-row:last-child {
+  border-bottom: none;
+}
+
+.settings-label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--on-surface-variant);
+}
+
+.settings-control {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.settings-control--wide {
+  flex: 1;
+  justify-content: flex-end;
+}
+
+/* Color choice as a plain-text segmented control -- the active one reads
+   by weight + underline alone, same "ink" language as the rest of the
+   page, not a filled pill. */
+.settings-choice {
+  background: none;
+  border: none;
+  font-family: var(--font-sans);
+  font-size: 0.8rem;
+  font-weight: 300;
+  color: var(--outline);
+  padding: 0 0.35rem;
+  cursor: pointer;
+}
+
+.settings-choice.is-active {
+  font-weight: 600;
+  color: var(--on-surface);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.settings-select {
+  background: none;
+  border: none;
+  border-bottom: 1px solid var(--outline-variant);
+  font-family: var(--font-sans);
+  font-size: 0.8rem;
+  color: var(--on-surface);
+  padding: 0.15rem 0;
+}
+
+.settings-value {
+  font-family: ui-monospace, Menlo, Consolas, monospace;
+  font-size: 0.75rem;
+  color: var(--on-surface-variant);
+  min-width: 2.5em;
+  text-align: right;
+}
+
+#strength-input {
+  width: 110px;
+  accent-color: var(--primary);
+}
+
+/* Mate badge / evaluation bar toggles: a checkbox styled as a switch, not
+   a checkbox with a label -- same control, same IDs, same app.js
+   listeners, purely a CSS reskin. */
+.settings-switch {
+  position: relative;
+  display: inline-block;
+  width: 2.25rem;
+  height: 1.25rem;
+  flex-shrink: 0;
+}
+
+.settings-switch input {
+  position: absolute;
+  opacity: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  cursor: pointer;
+}
+
+.settings-switch-track {
+  position: absolute;
+  inset: 0;
+  background: var(--outline-variant);
+  border-radius: 999px;
+  transition: background-color 0.15s ease;
+}
+
+.settings-switch-track::before {
+  content: "";
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 1rem;
+  height: 1rem;
+  background: var(--surface);
+  border-radius: 50%;
+  transition: transform 0.15s ease;
+}
+
+.settings-switch input:checked + .settings-switch-track {
+  background: var(--primary);
+}
+
+.settings-switch input:checked + .settings-switch-track::before {
+  transform: translateX(1rem);
+}
+
 #controls {
   display: flex;
   gap: 0.5rem;

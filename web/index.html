@@ -18,30 +18,57 @@
 <link rel="stylesheet" href="/static/styles/high-contrast.css">
 </head>
 <body>
-<h1>Me X GOAT</h1>
+<!-- docs/week-5.md session 1: a slim header (title + one settings trigger)
+     replacing the always-visible controls block. No hamburger -- this is
+     a single-screen app with nothing for one to navigate to; "tune" reads
+     correctly as "adjust the game," which is all this icon does. The
+     invisible spacer on the left keeps the title visually centered
+     without a second, redundant icon. -->
+<header id="app-header">
+  <span class="header-spacer" aria-hidden="true"></span>
+  <h1>Me X GOAT</h1>
+  <button type="button" id="settings-toggle" aria-expanded="false" aria-controls="settings-panel">
+    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+      <line x1="4" y1="6" x2="20" y2="6"></line>
+      <circle cx="9" cy="6" r="2" fill="currentColor" stroke="none"></circle>
+      <line x1="4" y1="12" x2="20" y2="12"></line>
+      <circle cx="15" cy="12" r="2" fill="currentColor" stroke="none"></circle>
+      <line x1="4" y1="18" x2="20" y2="18"></line>
+      <circle cx="7" cy="18" r="2" fill="currentColor" stroke="none"></circle>
+    </svg>
+  </button>
+</header>
 
-<div id="new-game-panel">
-  <div>
-    <span data-i18n="playAs">Play as:</span>
-    <button type="button" data-color="white" data-i18n="white">White</button>
-    <button type="button" data-color="black" data-i18n="black">Black</button>
-    <button type="button" data-color="random" data-i18n="random">Random</button>
+<!-- Collapsed by default, revealed by the header's trigger. A clean list
+     of rows (label left, control right, hairline divider between rows),
+     matching docs/ui-reference/mockup.html -- same controls
+     #new-game-panel had, same IDs, same behavior, just relaid out. -->
+<section id="settings-panel">
+  <div class="settings-row">
+    <span class="settings-label" data-i18n="playAs">Play as:</span>
+    <span class="settings-control" id="color-choices">
+      <button type="button" class="settings-choice is-active" data-color="white" data-i18n="white">White</button>
+      <button type="button" class="settings-choice" data-color="black" data-i18n="black">Black</button>
+      <button type="button" class="settings-choice" data-color="random" data-i18n="random">Random</button>
+    </span>
   </div>
-  <div>
-    <label for="strength-input" data-i18n="strength">Strength:</label>
-    <input type="range" id="strength-input" min="800" max="2800" step="100" value="1400">
-    <span id="strength-value">1400</span>
+  <div class="settings-row">
+    <label class="settings-label" for="strength-input" data-i18n="strength">Strength:</label>
+    <span class="settings-control settings-control--wide">
+      <input type="range" id="strength-input" min="800" max="2800" step="100" value="1400">
+      <span id="strength-value" class="settings-value">1400</span>
+    </span>
   </div>
-  <div>
-    <label for="style-input" data-i18n="style">Style:</label>
-    <select id="style-input">
+  <div class="settings-row">
+    <label class="settings-label" for="style-input" data-i18n="style">Style:</label>
+    <select class="settings-select" id="style-input">
       <option value="carlsen" data-i18n="styleCarlsen">Carlsen</option>
       <option value="raw" data-i18n="styleRaw">Raw engine</option>
     </select>
   </div>
-  <div>
-    <label for="theme-input" data-i18n="theme">Theme:</label>
-    <select id="theme-input">
+  <div class="settings-row">
+    <label class="settings-label" for="theme-input" data-i18n="theme">Theme:</label>
+    <select class="settings-select" id="theme-input">
       <option value="wood" data-i18n="themeWood">Wood</option>
       <option value="classic-green" data-i18n="themeClassicGreen">Classic green</option>
       <option value="blue" data-i18n="themeBlue">Blue</option>
@@ -49,28 +76,30 @@
       <option value="high-contrast" data-i18n="themeHighContrast">High contrast</option>
     </select>
   </div>
-  <div>
-    <label for="language-input" data-i18n="language">Language:</label>
+  <div class="settings-row">
+    <label class="settings-label" for="language-input" data-i18n="language">Language:</label>
     <!-- Each language names itself, not translated by the switch itself --
          the same convention every language picker follows. -->
-    <select id="language-input">
+    <select class="settings-select" id="language-input">
       <option value="en-US">English</option>
       <option value="pt-BR">Português (Brasil)</option>
     </select>
   </div>
-  <div>
-    <label for="mate-badge-toggle">
+  <div class="settings-row">
+    <label class="settings-label" for="mate-badge-toggle" data-i18n="mateBadgeToggle">Mate badge</label>
+    <span class="settings-switch">
       <input type="checkbox" id="mate-badge-toggle" checked>
-      <span data-i18n="mateBadgeToggle">Mate badge</span>
-    </label>
+      <span class="settings-switch-track" aria-hidden="true"></span>
+    </span>
   </div>
-  <div>
-    <label for="eval-bar-toggle">
+  <div class="settings-row">
+    <label class="settings-label" for="eval-bar-toggle" data-i18n="evalBarToggle">Evaluation bar</label>
+    <span class="settings-switch">
       <input type="checkbox" id="eval-bar-toggle" checked>
-      <span data-i18n="evalBarToggle">Evaluation bar</span>
-    </label>
+      <span class="settings-switch-track" aria-hidden="true"></span>
+    </span>
   </div>
-</div>
+</section>
 
 <!-- design.md §7: announces mate's existence and distance only, never the
      piece, square, or move. Empty (and hidden, see base.css) whenever

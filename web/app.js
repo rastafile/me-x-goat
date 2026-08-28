@@ -21,6 +21,9 @@ const themeInput = document.getElementById("theme-input")
 const languageInput = document.getElementById("language-input")
 const mateBadgeToggle = document.getElementById("mate-badge-toggle")
 const evalBarToggle = document.getElementById("eval-bar-toggle")
+const settingsToggle = document.getElementById("settings-toggle")
+const settingsPanel = document.getElementById("settings-panel")
+const colorChoices = document.getElementById("color-choices")
 
 const DEFAULT_THEME = "wood"
 const THEME_STORAGE_KEY = "theme"
@@ -54,8 +57,16 @@ const board = new Chessboard(document.getElementById("board"), {
     extensions: [{class: PromotionDialog}],
 })
 
-document.querySelectorAll("#new-game-panel button").forEach((button) => {
-    button.addEventListener("click", () => startNewGame(button.dataset.color))
+document.querySelectorAll("#color-choices button").forEach((button) => {
+    button.addEventListener("click", () => {
+        colorChoices.querySelectorAll(".settings-choice").forEach((b) => b.classList.remove("is-active"))
+        button.classList.add("is-active")
+        startNewGame(button.dataset.color)
+    })
+})
+settingsToggle.addEventListener("click", () => {
+    const open = settingsPanel.classList.toggle("open")
+    settingsToggle.setAttribute("aria-expanded", String(open))
 })
 takeBackButton.addEventListener("click", takeBack)
 exportPgnButton.addEventListener("click", exportPgn)
