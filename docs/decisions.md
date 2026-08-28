@@ -543,3 +543,76 @@ book data at all, and will fall through to the heuristic filter on every
 move regardless of what the opponent plays. This is expected, not a bug:
 more lines (for either color) are a data addition to
 `data/opening_books/carlsen.json`, not a code change.
+
+---
+
+## ADR 12: The optional chess clock is orchestration state, not board state
+
+### Context
+
+`docs/week-7.md` adds an optional chess clock. Confirmed with the user
+before any code: presets only (no free-form minutes/increment input);
+both sides timed identically, with the GOAT's own analysis time staying
+exactly what it is today (no adaptive time management); a flagged side
+loses unless the opponent has insufficient mating material (FIDE's own
+rule); take-back never refunds time.
+
+A real design question this raised: `python-chess`'s `Termination` enum
+has no timeout value, and a clock is not a fact about a chess position --
+`game.py`'s "only game.py touches the board" boundary (`CLAUDE.md`) has
+nothing to say about it either way.
+
+### Decision
+
+- `src/clock.py` is new, small, and deliberately not pure in the way
+  `persona.py`/`tutor.py` are (reading elapsed wall-clock time is a real
+  side effect) -- but every method takes `now_ms` as an explicit
+  parameter rather than reading the clock itself, keeping it
+  deterministically testable, the same shape `engine.py`'s subprocess
+  boundary already established for "not pure, but still testable."
+- A clock-caused game end lives in `app.state.timeout_outcome`
+  (`server.py`), not in `game.py`. `_state_response` is the one place
+  that combines it with `game.is_over()`/`game.outcome()` into the
+  response's `is_over`/`outcome` fields, so no caller has to remember to
+  OR the two together itself.
+- `GameStateResponse` gained a separate `ended_by_timeout: bool` rather
+  than overloading `outcome`. `outcome` alone is ambiguous: a
+  clock-triggered draw reuses the string `"insufficient_material"`
+  verbatim (an ordinary board-reached draw already meant exactly that),
+  so a client can't tell the two apart from `outcome` alone -- and it
+  needs to, since `/take-back` treats them differently (below).
+- `/take-back` rejects once `timeout_outcome` is set, but **not** for an
+  ordinary board-ended game (a checkmate can still be taken back, per
+  design.md's existing "no rating, no competition" philosophy). There is
+  no rule invented here for "restoring time" to make a clock-ended game
+  resumable, so it's simply not offered.
+- Taking back into an in-progress position always restarts clock
+  *tracking* for whoever is now to move (`Clock.start_turn`), regardless
+  of whether a turn was already running. This is required, not
+  cosmetic: a game-over move stops the clock with no turn running at
+  all, and without an explicit restart, the mover's next real move after
+  a take-back would go completely uncharged. Confirmed as a real
+  regression, not a hypothetical one, by temporarily removing the fix
+  and watching `test_take_back_after_checkmate_unfreezes_the_clock` fail
+  exactly as predicted.
+- The `outcome.timeout` phrase lives in `web/i18n.js`, not
+  `narration.py`. This plan originally assumed the opposite -- but
+  `narration.py`'s outcome phrases are only ever read from inside a
+  GOAT-move response (`describe_move`), and a timeout never produces
+  one (no move happens; time simply runs out). The existing client-side
+  path that already covers "the user's own move ended the game, so
+  there's no GOAT reply to narrate it" turned out to be the exact same
+  mechanism a timeout needed -- discovered during session 1, not
+  designed in this plan up front.
+
+### Rejected alternative
+
+Giving the GOAT adaptive time management (spending more real analysis
+time on critical positions, budgeted against its own remaining clock).
+Confirmed with the user as out of scope: at today's analysis times
+(50-800ms/move), the GOAT will essentially never run low regardless of
+time control, and building a real time-management policy has no
+evidence behind it yet -- the same "guess now" trap week 6 spent two
+sessions un-guessing for the style weights. If this ever becomes worth
+doing, it deserves its own session-driven investigation, not a
+first-pass guess bundled into this one.
