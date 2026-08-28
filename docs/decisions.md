@@ -311,3 +311,45 @@ this session didn't build: the game plan is an occasional narrative aid,
 not a fairness-affecting count, so a coarser fix was judged acceptable for
 v1. Revisit if it turns out to look actively wrong in play rather than
 just slightly stale.
+
+---
+
+## ADR 9: `web/`'s redesign vendors its two fonts locally instead of loading Tailwind/Google Fonts from a CDN
+
+### Context
+
+`docs/week-5.md` implements a UI reference (`docs/ui-reference/`) generated
+with Google Stitch. As shipped, that reference's `mockup.html` loads
+Tailwind and two Google Fonts (Libre Caslon Text, Hanken Grotesk) from
+CDNs at runtime (`cdn.tailwindcss.com`, `fonts.googleapis.com`). README
+and design.md: "Everything runs on your machine... Offline play is a
+requirement, not a fallback." `web/` today has zero runtime network
+dependencies beyond the narration API itself, which already degrades
+gracefully offline (`coach.py`'s own fallback, design.md §9). Copying the
+mockup's `<link>` tags verbatim would make the *page itself* — not just
+narration — require internet access to render correctly, for the first
+time in this project.
+
+### Decision
+
+Vendor both font families locally, the same way `cm-chessboard` was
+vendored (design.md §3: "which also keeps the board working fully
+offline, consistent with this app never needing anything but the
+narration calls to leave the machine"). Both are SIL Open Font License —
+freely vendorable, same licensing shape as `cm-chessboard`'s MIT — under
+`web/vendor/fonts/`, referenced via local `@font-face` rules with real
+system-font fallback stacks. No Tailwind at runtime either: `web/styles/`
+stays hand-written plain CSS, translating the mockup's utility classes
+into the project's existing convention (`base.css` for structure/chrome;
+theme files stay board-square-only, untouched by this redesign).
+
+### Rejected alternative
+
+Loading the fonts (and Tailwind) from their CDNs directly, same as the
+reference mockup does. Rejected because it would be the first thing in
+this app that makes the page itself depend on network access — every
+other network dependency (the narration API) was deliberately designed
+with a full offline fallback from the start; the UI chrome doing
+otherwise, just to save a vendoring step, would be a real regression in a
+project that treats "runs entirely on your machine" as a repeated,
+explicit selling point, not an implementation detail.

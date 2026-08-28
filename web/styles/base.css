@@ -1,5 +1,64 @@
+/* Week 5's redesign ("Grandmaster Ledger", docs/ui-reference/) -- fonts
+   vendored locally rather than loaded from Google Fonts at runtime, and
+   Tailwind isn't used at all: this page must render correctly with zero
+   network access, the same reason web/vendor/cm-chessboard exists
+   (docs/decisions.md ADR 9). Real system-font fallbacks on both, so the
+   page still reads correctly if a font file somehow fails to load. */
+@font-face {
+  font-family: "Libre Caslon Text";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("/static/vendor/fonts/libre-caslon-text-400.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Libre Caslon Text";
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url("/static/vendor/fonts/libre-caslon-text-700.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Libre Caslon Text";
+  font-style: italic;
+  font-weight: 400;
+  font-display: swap;
+  src: url("/static/vendor/fonts/libre-caslon-text-400-italic.woff2") format("woff2");
+}
+@font-face {
+  /* A single variable-font file covers all three weights -- Google Fonts'
+     own CSS does the same thing (three @font-face rules, one file), so
+     this mirrors their approach exactly rather than duplicating a file
+     three times for no reason. */
+  font-family: "Hanken Grotesk";
+  font-style: normal;
+  font-weight: 400 600;
+  font-display: swap;
+  src: url("/static/vendor/fonts/hanken-grotesk-variable.woff2") format("woff2");
+}
+
+:root {
+  /* Token names follow docs/ui-reference/DESIGN-SYSTEM.md's own vocabulary,
+     so later sessions of docs/week-5.md can reference these instead of
+     hardcoded hex values as each area gets redesigned. Not every rule
+     below uses these yet -- session 0 only establishes them; sessions 1-3
+     migrate the rules that touch each area they redesign. */
+  --surface: #fcf9f5;
+  --surface-container: #f0ede9;
+  --surface-container-high: #eae8e4;
+  --on-surface: #1c1c1a;
+  --on-surface-variant: #444748;
+  --outline: #747878;
+  --outline-variant: #c4c7c7;
+  --primary: #1c1c1a;
+  --on-primary: #ffffff;
+
+  --font-serif: "Libre Caslon Text", Georgia, "Times New Roman", serif;
+  --font-sans: "Hanken Grotesk", system-ui, sans-serif;
+}
+
 body {
-  font-family: system-ui, sans-serif;
+  font-family: var(--font-sans);
   max-width: 480px;
   margin: 2rem auto;
   padding: 0 1rem;
