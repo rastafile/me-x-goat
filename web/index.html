@@ -112,6 +112,13 @@
       <span class="settings-switch-track" aria-hidden="true"></span>
     </span>
   </div>
+  <!-- Picking a color already starts a game immediately with it -- this
+       button exists for every other setting on this panel (strength,
+       style, theme, clock), so changing one of those doesn't require
+       re-clicking a color just to apply it. Starts with whichever color
+       is currently marked active, same call the color buttons themselves
+       make. -->
+  <button type="button" id="start-game-button" data-i18n="startGame">Start game</button>
 </section>
 
 <!-- design.md §7: announces mate's existence and distance only, never the
