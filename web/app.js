@@ -27,6 +27,7 @@ const colorChoices = document.getElementById("color-choices")
 const clockInput = document.getElementById("clock-input")
 const opponentClockEl = document.getElementById("opponent-clock")
 const userClockEl = document.getElementById("user-clock")
+const startGameButton = document.getElementById("start-game-button")
 
 const DEFAULT_THEME = "wood"
 const THEME_STORAGE_KEY = "theme"
@@ -81,6 +82,12 @@ document.querySelectorAll("#color-choices button").forEach((button) => {
 settingsToggle.addEventListener("click", () => {
     const open = settingsPanel.classList.toggle("open")
     settingsToggle.setAttribute("aria-expanded", String(open))
+})
+// A color click already starts a game with that color immediately -- this
+// is for every other setting on the panel (strength, style, theme, clock),
+// so changing one doesn't require re-clicking a color just to apply it.
+startGameButton.addEventListener("click", () => {
+    startNewGame(colorChoices.querySelector(".is-active").dataset.color)
 })
 takeBackButton.addEventListener("click", takeBack)
 exportPgnButton.addEventListener("click", exportPgn)

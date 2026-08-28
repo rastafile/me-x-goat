@@ -212,8 +212,37 @@ body {
   border-bottom: 1px solid var(--outline-variant);
 }
 
-.settings-row:last-child {
+/* :last-of-type, not :last-child -- #start-game-button now follows the
+   last .settings-row as a sibling, so :last-child would no longer match
+   any row at all. */
+.settings-row:last-of-type {
   border-bottom: none;
+}
+
+/* The one clearly primary action on this panel -- bolder and set off by
+   a rule above it, still plain text with no box/pill, same ink-only
+   language as everything else here. */
+#start-game-button {
+  display: block;
+  width: 100%;
+  margin-top: 0.5rem;
+  padding: 0.85rem 0 0;
+  border: none;
+  border-top: 1px solid var(--outline-variant);
+  background: none;
+  font-family: var(--font-sans);
+  font-size: 0.85rem;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  text-align: center;
+  color: var(--on-surface);
+  cursor: pointer;
+}
+
+#start-game-button:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
 }
 
 .settings-label {
