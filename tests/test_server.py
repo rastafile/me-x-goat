@@ -805,3 +805,76 @@ def test_a_move_arriving_after_the_mover_already_flagged_ends_the_game_instead(c
     assert data["is_over"] is True
     assert data["outcome"] == "timeout"
     assert app.state.game.fen == fen_before  # the move was never pushed
+
+
+@pytest.mark.integration
+def test_ended_by_timeout_is_true_after_a_real_timeout(client):
+    client.post("/new-game", json={"color": "white"})
+    app.state.clock = Clock(white_ms=0, black_ms=60_000, increment_ms=0)
+
+    response = client.post("/timeout", json={"color": "white"})
+
+    assert response.json()["ended_by_timeout"] is True
+
+
+@pytest.mark.integration
+def test_ended_by_timeout_is_false_for_an_ordinary_checkmate(client):
+    # outcome alone can't tell an ordinary game-over apart from a
+    # clock-caused one (docs/week-7.md session 3) -- this field can.
+    client.post("/new-game", json={"color": "white"})
+    app.state.game = Game(user_color="white", fen=WHITE_MATE_IN_1_FEN)
+
+    response = client.post("/move", json={"uci": "e1e8"})
+
+    data = response.json()
+    assert data["outcome"] == "checkmate"
+    assert data["ended_by_timeout"] is False
+
+
+# --- take-back and the clock (docs/week-7.md session 3) --------------------
+
+
+@pytest.mark.integration
+def test_take_back_is_still_allowed_after_an_ordinary_checkmate(client):
+    # design.md's take-back philosophy ("no rating, no competition") still
+    # applies to a checkmate -- only a clock-ended game rejects it.
+    client.post("/new-game", json={"color": "white"})
+    app.state.game = Game(user_color="white", fen=WHITE_MATE_IN_1_FEN)
+    client.post("/move", json={"uci": "e1e8"})
+
+    response = client.post("/take-back")
+
+    assert response.status_code == 200
+    assert response.json()["is_over"] is False
+
+
+@pytest.mark.integration
+def test_take_back_restarts_the_movers_clock(client):
+    # Direct inspection of Clock's own (private) tracking state -- a
+    # subsequent move's real elapsed time is too close to zero in an
+    # in-process test to reliably assert on, so this checks the mechanism
+    # take_back() is actually responsible for, not a downstream effect of it.
+    client.post("/new-game", json={"color": "white", "clock": "blitz"})
+    client.post("/move", json={"uci": "e2e4"})  # GOAT replies; white's turn is now running
+
+    client.post("/take-back")
+
+    assert app.state.clock._running_color == "white"
+    assert app.state.clock._turn_started_at_ms is not None
+
+
+@pytest.mark.integration
+def test_take_back_after_checkmate_unfreezes_the_clock(client):
+    # The specific bug this session fixes: a checkmate stops the clock
+    # with no turn running at all (no move follows a game-over move). If
+    # take-back doesn't explicitly restart tracking, white's own turn
+    # after undoing the checkmate would never be marked as running, and
+    # its next real move would go uncharged entirely.
+    client.post("/new-game", json={"color": "white", "clock": "bullet"})
+    app.state.game = Game(user_color="white", fen=WHITE_MATE_IN_1_FEN)
+    client.post("/move", json={"uci": "e1e8"})  # checkmate; the clock's turn stops
+    assert app.state.clock._running_color is None  # confirms the frozen state this is guarding against
+
+    client.post("/take-back")
+
+    assert app.state.clock._running_color == "white"

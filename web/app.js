@@ -305,7 +305,12 @@ function applyState(state) {
     currentFen = state.fen
     legalMoves = state.legal_moves
     gameOver = state.is_over
-    takeBackButton.disabled = false
+    // A checkmate can still be taken back (design.md's "no rating, no
+    // competition" take-back philosophy) -- only a clock-ended game
+    // rejects it server-side (docs/week-7.md session 3), and outcome
+    // alone can't tell that apart from an ordinary insufficient-material
+    // draw, hence the dedicated field.
+    takeBackButton.disabled = state.ended_by_timeout
     exportPgnButton.disabled = false
 
     renderDynamicPanels(state)

@@ -145,6 +145,12 @@ class GameStateResponse(BaseModel):
     outcome: str | None
     white_time_ms: int | None
     black_time_ms: int | None
+    # True only when the *clock* ended the game -- outcome alone can't
+    # disambiguate this from an ordinary, board-reached
+    # "insufficient_material" draw, and /take-back's own rejection
+    # (docs/week-7.md session 3) is specifically about the clock case, not
+    # every game-over state (a checkmate can still be taken back).
+    ended_by_timeout: bool
 
 
 @asynccontextmanager
@@ -427,6 +433,16 @@ def take_back() -> GameStateResponse:
             color, assessment = undone
             _adjust_mistake_count(app.state.mistake_counts, color, assessment.classification, -1)
 
+    if app.state.clock is not None and not game.is_over():
+        # The clock only ever moves forward -- remaining_ms for the popped
+        # plies stays exactly as deducted, never refunded (docs/week-7.md).
+        # This restarts *tracking* for whoever is now to move, the same
+        # way any other move leaving the game in-progress does; without
+        # it, a game taken back after ending (e.g. undoing a checkmate)
+        # would leave the clock frozen with no turn running at all, and
+        # the mover's next real move would go uncharged entirely.
+        app.state.clock.start_turn(game.turn, _now_ms())
+
     return _state_response(
         game,
         goat_move=None,
@@ -612,6 +628,7 @@ def _state_response(
         outcome=outcome,
         white_time_ms=clock.remaining_ms("white") if clock is not None else None,
         black_time_ms=clock.remaining_ms("black") if clock is not None else None,
+        ended_by_timeout=timeout_outcome is not None,
     )
 
 
