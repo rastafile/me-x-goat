@@ -4,8 +4,8 @@
     {
       "name": "me-x-goat-server",
       "runtimeExecutable": ".venv/bin/uvicorn",
-      "runtimeArgs": ["src.server:app", "--port", "8000"],
-      "port": 8000
+      "runtimeArgs": ["src.server:app", "--port", "3333"],
+      "port": 3333
     }
   ]
 }
