@@ -4,10 +4,11 @@ A local chess study app. The user plays against an opponent with a grandmaster
 persona and receives analysis from an independent tutor after each of their moves.
 
 Full spec in `docs/design.md`. Weeks 1-4's plans are in `docs/week-1.md` through
-`docs/week-4.md` (all done — v1 complete). No week-5 plan exists yet; write one
-before starting further work, and read it alongside the spec before writing code.
-If this file and the spec disagree, this file wins and the spec should be
-corrected.
+`docs/week-4.md` (all done — v1 complete). Current week's plan is in
+`docs/week-5.md` (a `web/` chrome redesign; see `docs/ui-reference/` for the
+visual reference it implements). Read the spec and the current week's plan
+before writing code. If this file and the spec disagree, this file wins and
+the spec should be corrected.
 
 ## Invariants
 

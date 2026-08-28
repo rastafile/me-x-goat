@@ -1,0 +1,395 @@
+<!DOCTYPE html>
+
+<html class="light" lang="pt-BR"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Me X GOAT - Grandmaster Ledger</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;500;600&amp;family=Libre+Caslon+Text:ital,wght@0,400;0,700;1,400&amp;family=JetBrains+Mono:wght@400;500&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<style>
+        .material-symbols-outlined {
+          font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        
+        /* Subtle paper texture effect */
+        body {
+            background-color: #f8f5ee; /* Soft cream / antique paper */
+            color: #333333; /* Charcoal text */
+        }
+
+        /* Chess Board Styles */
+        .chess-board {
+            display: grid;
+            grid-template-columns: repeat(8, 1fr);
+            grid-template-rows: repeat(8, 1fr);
+            aspect-ratio: 1 / 1;
+            width: 100%;
+            border: 1px solid #5a5a5a; /* Charcoal outline */
+        }
+        
+        .light-square { background-color: #f0ead6; } /* Eggshell */
+        .dark-square { background-color: #a89f91; } /* Muted taupe/brown */
+        
+        /* Wood Theme Override (Simulation) - Kept for compatibility but adapted for antique look */
+        .theme-wood .light-square { background-color: #e6dfcf; }
+        .theme-wood .dark-square { background-color: #8b7d6b; }
+        
+        /* Divider style for ledger */
+        .ledger-divider {
+            border-bottom: 1px solid #d3cfc5;
+        }
+
+        .chess-piece {
+            font-size: clamp(20px, 6vw, 40px); /* Responsive size */
+            line-height: 1;
+            color: #333333;
+            text-shadow: none; /* No shadow, clean ink look */
+            user-select: none;
+        }
+    </style>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            "colors": {
+                    "secondary-fixed": "#e4e2dd",
+                    "on-primary-fixed-variant": "#474746",
+                    "primary": "#333333", /* Charcoal */
+                    "on-tertiary-container": "#333333",
+                    "on-primary-fixed": "#1c1b1b",
+                    "primary-container": "#1c1b1b",
+                    "secondary-fixed-dim": "#c8c6c2",
+                    "surface-tint": "#5f5e5e",
+                    "inverse-on-surface": "#f3f0ec",
+                    "surface-container-highest": "#e5e2de",
+                    "outline-variant": "#d3cfc5", /* Antique divider */
+                    "on-surface": "#333333", /* Charcoal */
+                    "surface-container": "#f0ede9",
+                    "surface-container-high": "#eae8e4",
+                    "on-secondary-container": "#63635f",
+                    "surface-variant": "#e5e2de",
+                    "tertiary-container": "#0f0069",
+                    "error": "#ba1a1a",
+                    "inverse-surface": "#31302e",
+                    "background": "#f8f5ee", /* Antique paper */
+                    "surface": "#f8f5ee", /* Antique paper */
+                    "on-error": "#ffffff",
+                    "inverse-primary": "#c8c6c5",
+                    "on-error-container": "#93000a",
+                    "primary-fixed-dim": "#c8c6c5",
+                    "tertiary": "#000000",
+                    "on-primary": "#ffffff",
+                    "outline": "#5a5a5a", /* Charcoal outline */
+                    "on-tertiary-fixed-variant": "#321ed2",
+                    "error-container": "#ffdad6",
+                    "surface-container-low": "#f6f3ef",
+                    "primary-fixed": "#e5e2e1",
+                    "on-surface-variant": "#4d4d4d",
+                    "on-primary-container": "#858383",
+                    "surface-bright": "#fcf9f5",
+                    "on-secondary-fixed": "#1b1c19",
+                    "on-tertiary": "#ffffff",
+                    "surface-container-lowest": "#ffffff",
+                    "on-secondary": "#ffffff",
+                    "on-background": "#333333",
+                    "tertiary-fixed-dim": "#c3c0ff",
+                    "on-secondary-fixed-variant": "#474744",
+                    "on-tertiary-fixed": "#0f0069",
+                    "secondary-container": "#e1dfdb",
+                    "tertiary-fixed": "#e2dfff",
+                    "secondary": "#5e5e5b",
+                    "surface-dim": "#dcdad6"
+            },
+            "borderRadius": {
+                    "DEFAULT": "0.125rem",
+                    "lg": "0.25rem",
+                    "xl": "0.5rem",
+                    "full": "0.75rem"
+            },
+            "spacing": {
+                    "gutter-panel": "1.5rem",
+                    "stack-lg": "2rem",
+                    "stack-sm": "0.5rem",
+                    "stack-md": "1rem",
+                    "margin-page": "2rem"
+            },
+            "fontFamily": {
+                    "game-plan-serif": [
+                            "Libre Caslon Text"
+                    ],
+                    "label-caps": [
+                            "Libre Caslon Text" /* Serif for small caps */
+                    ],
+                    "analysis-mono": [
+                            "JetBrains Mono"
+                    ],
+                    "display-lg": [
+                            "Libre Caslon Text"
+                    ],
+                    "headline-md": [
+                            "Libre Caslon Text"
+                    ],
+                    "body-base": [
+                            "Hanken Grotesk"
+                    ],
+                    "headline-md-mobile": [
+                            "Libre Caslon Text"
+                    ]
+            },
+            "fontSize": {
+                    "game-plan-serif": [
+                            "18px",
+                            {
+                                    "lineHeight": "1.6",
+                                    "fontWeight": "400"
+                            }
+                    ],
+                    "label-caps": [
+                            "14px",
+                            {
+                                    "lineHeight": "1",
+                                    "letterSpacing": "0.08em",
+                                    "fontWeight": "600"
+                            }
+                    ],
+                    "analysis-mono": [
+                            "14px",
+                            {
+                                    "lineHeight": "1.4",
+                                    "fontWeight": "500"
+                            }
+                    ],
+                    "display-lg": [
+                            "42px",
+                            {
+                                    "lineHeight": "1.2",
+                                    "letterSpacing": "-0.02em",
+                                    "fontWeight": "700"
+                            }
+                    ],
+                    "headline-md": [
+                            "28px",
+                            {
+                                    "lineHeight": "1.3",
+                                    "fontWeight": "600"
+                            }
+                    ],
+                    "body-base": [
+                            "16px",
+                            {
+                                    "lineHeight": "1.6",
+                                    "fontWeight": "400"
+                            }
+                    ],
+                    "headline-md-mobile": [
+                            "24px",
+                            {
+                                    "lineHeight": "1.3",
+                                    "fontWeight": "600"
+                            }
+                    ]
+            }
+          }
+        }
+      }
+    </script>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+</head>
+<body class="bg-surface text-on-surface font-body-base min-h-screen flex flex-col md:hidden pb-10">
+<!-- TopAppBar -->
+<header class="bg-surface border-b border-outline-variant flex justify-between items-center w-full px-4 py-4 sticky top-0 z-10 docked full-width">
+<div class="w-10"></div> <!-- Placeholder to balance flex -->
+<h1 class="font-headline-md-mobile text-headline-md-mobile text-primary tracking-tight">
+            Me X GOAT
+        </h1>
+<button class="text-on-surface-variant hover:opacity-80 transition-opacity p-2">
+<span class="material-symbols-outlined" data-icon="tune">tune</span>
+</button>
+</header>
+<main class="flex-grow px-4 py-6 flex flex-col gap-6">
+<!-- Setup Bar (Appendices Simulation) -->
+<section class="bg-transparent p-0 flex flex-col gap-0 ledger-divider pb-4">
+<div class="flex justify-between items-center cursor-pointer py-2">
+<span class="font-label-caps text-label-caps text-primary uppercase font-bold tracking-widest">Configuração</span>
+<button class="text-on-surface-variant hover:text-primary transition-colors">
+<span class="material-symbols-outlined text-sm">expand_less</span>
+</button>
+</div>
+<div class="flex flex-col gap-0 text-sm font-body-base">
+<!-- Play as -->
+<div class="flex justify-between items-center py-3 border-b border-outline-variant">
+<span class="text-on-surface">Jogar como</span>
+<div class="flex border border-outline rounded-none">
+<button class="px-2 py-1 bg-primary text-background text-xs font-bold">Brancas</button>
+<button class="px-2 py-1 bg-transparent text-primary hover:bg-surface-variant transition-colors border-l border-outline text-xs">Pretas</button>
+<button class="px-2 py-1 bg-transparent text-primary hover:bg-surface-variant transition-colors border-l border-outline text-xs">Aleatório</button>
+</div>
+</div>
+<!-- Strength -->
+<div class="flex justify-between items-center py-3 border-b border-outline-variant gap-4">
+<span class="text-on-surface whitespace-nowrap">Força: <span class="font-bold">1400</span></span>
+<input class="w-full accent-primary h-1 bg-outline-variant rounded-none appearance-none" max="3200" min="800" type="range" value="1400"/>
+</div>
+<!-- Style -->
+<div class="flex justify-between items-center py-3 border-b border-outline-variant">
+<span class="text-on-surface">Estilo</span>
+<select class="bg-transparent border-none text-primary text-sm focus:ring-0 text-right pr-6">
+<option>Carlsen</option>
+<option>Motor puro</option>
+</select>
+</div>
+<!-- Theme -->
+<div class="flex justify-between items-center py-3 border-b border-outline-variant">
+<span class="text-on-surface">Tema do tabuleiro</span>
+<select class="bg-transparent border-none text-primary text-sm focus:ring-0 text-right pr-6">
+<option>Madeira</option>
+<option>Verde clássico</option>
+<option>Azul</option>
+<option>Mármore</option>
+<option>Alto contraste</option>
+</select>
+</div>
+<!-- Language -->
+<div class="flex justify-between items-center py-3 border-b border-outline-variant">
+<span class="text-on-surface">Idioma</span>
+<select class="bg-transparent border-none text-primary text-sm focus:ring-0 text-right pr-6">
+<option>PT-BR</option>
+<option>EN</option>
+</select>
+</div>
+<!-- Mate Badge Toggle -->
+<label class="flex justify-between items-center py-3 border-b border-outline-variant cursor-pointer">
+<span class="text-on-surface">Alerta de mate</span>
+<div class="relative">
+<input checked="" class="sr-only peer" type="checkbox"/>
+<div class="w-9 h-5 bg-outline-variant peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-primary"></div>
+</div>
+</label>
+<!-- Evaluation Bar Toggle -->
+<label class="flex justify-between items-center py-3 cursor-pointer">
+<span class="text-on-surface">Barra de avaliação</span>
+<div class="relative">
+<input checked="" class="sr-only peer" type="checkbox"/>
+<div class="w-9 h-5 bg-outline-variant peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-primary"></div>
+</div>
+</label>
+</div>
+</section>
+<!-- Board Section -->
+<section class="flex flex-col items-center gap-1">
+<!-- Mate Badge -->
+<div class="text-on-surface-variant text-xs font-body-base self-start mb-0">
+                mate em 3 disponível
+            </div>
+<div class="flex w-full gap-2 relative">
+<!-- Evaluation Bar: a forced mate saturates it fully -- there's no cp
+     scale left once mate is on the board -- so this must match the mate
+     badge above (100%), not a middling value. -->
+<div class="w-[6px] bg-surface-variant border border-outline-variant relative overflow-hidden flex-shrink-0">
+<!-- White advantage (bottom fill) -->
+<div class="absolute bottom-0 w-full bg-primary" style="height: 100%;"></div>
+</div>
+<!-- Chess Board (Wood Theme adapted) -->
+<div class="chess-board theme-wood w-full flex-grow relative overflow-hidden border border-outline">
+<!-- Row 8 (Black Pieces) -->
+<div class="light-square flex items-center justify-center relative"><span class="absolute top-0.5 left-0.5 text-[10px] text-on-surface-variant font-game-plan-serif">8</span><span class="chess-piece">♜</span></div>
+<div class="dark-square flex items-center justify-center"><span class="chess-piece">♞</span></div>
+<div class="light-square flex items-center justify-center"><span class="chess-piece">♝</span></div>
+<div class="dark-square flex items-center justify-center"><span class="chess-piece">♛</span></div>
+<div class="light-square flex items-center justify-center"><span class="chess-piece">♚</span></div>
+<div class="dark-square flex items-center justify-center"></div>
+<div class="light-square flex items-center justify-center"><span class="chess-piece">♞</span></div>
+<div class="dark-square flex items-center justify-center"><span class="chess-piece">♜</span></div>
+<!-- Row 7 (Black Pawns) -->
+<div class="dark-square flex items-center justify-center relative"><span class="absolute top-0.5 left-0.5 text-[10px] text-on-surface-variant font-game-plan-serif">7</span><span class="chess-piece">♟</span></div>
+<div class="light-square flex items-center justify-center"><span class="chess-piece">♟</span></div>
+<div class="dark-square flex items-center justify-center"><span class="chess-piece">♟</span></div>
+<div class="light-square flex items-center justify-center"><span class="chess-piece">♟</span></div>
+<div class="dark-square flex items-center justify-center"></div>
+<div class="light-square flex items-center justify-center"><span class="chess-piece">♟</span></div>
+<div class="dark-square flex items-center justify-center"><span class="chess-piece">♟</span></div>
+<div class="light-square flex items-center justify-center"><span class="chess-piece">♟</span></div>
+<!-- Rows 6-3 -->
+<div class="light-square relative"><span class="absolute top-0.5 left-0.5 text-[10px] text-on-surface-variant font-game-plan-serif">6</span></div><div class="dark-square"></div><div class="light-square"></div><div class="dark-square"></div><div class="light-square"></div><div class="dark-square"></div><div class="light-square"></div><div class="dark-square"></div>
+<div class="dark-square relative"><span class="absolute top-0.5 left-0.5 text-[10px] text-on-surface-variant font-game-plan-serif">5</span></div><div class="light-square"></div><div class="dark-square"></div><div class="light-square"></div>
+<div class="dark-square flex items-center justify-center"><span class="chess-piece">♟</span></div> <!-- Black Pawn e5 -->
+<div class="light-square"></div><div class="dark-square"></div><div class="light-square"></div>
+<div class="light-square relative"><span class="absolute top-0.5 left-0.5 text-[10px] text-on-surface-variant font-game-plan-serif">4</span></div>
+<div class="dark-square flex items-center justify-center"><span class="chess-piece">♝</span></div> <!-- Black Bishop b4 (Bxb4) -->
+<div class="light-square"></div><div class="dark-square"></div>
+<div class="light-square flex items-center justify-center"><span class="chess-piece">♙</span></div> <!-- White Pawn e4 -->
+<div class="dark-square"></div>
+<div class="light-square flex items-center justify-center"><span class="chess-piece">♙</span></div> <!-- White Pawn g4 -->
+<div class="dark-square"></div>
+<div class="dark-square relative"><span class="absolute top-0.5 left-0.5 text-[10px] text-on-surface-variant font-game-plan-serif">3</span></div><div class="light-square"></div><div class="dark-square"></div><div class="light-square"></div><div class="dark-square"></div><div class="light-square"></div><div class="dark-square"></div><div class="light-square"></div>
+<!-- Row 2 (White Pawns) -->
+<div class="light-square flex items-center justify-center relative"><span class="absolute top-0.5 left-0.5 text-[10px] text-on-surface-variant font-game-plan-serif">2</span><span class="chess-piece">♙</span></div>
+<div class="dark-square flex items-center justify-center"></div>
+<div class="light-square flex items-center justify-center"><span class="chess-piece">♙</span></div>
+<div class="dark-square flex items-center justify-center"><span class="chess-piece">♙</span></div>
+<div class="light-square flex items-center justify-center"></div>
+<div class="dark-square flex items-center justify-center"><span class="chess-piece">♙</span></div>
+<div class="light-square flex items-center justify-center"></div>
+<div class="dark-square flex items-center justify-center"><span class="chess-piece">♙</span></div>
+<!-- Row 1 (White Pieces) -->
+<div class="dark-square flex items-center justify-center relative"><span class="absolute top-0.5 left-0.5 text-[10px] text-on-surface-variant font-game-plan-serif">1</span><span class="absolute bottom-0 right-0.5 text-[10px] text-on-surface-variant font-game-plan-serif">a</span><span class="chess-piece">♖</span></div>
+<div class="light-square flex items-center justify-center relative"><span class="absolute bottom-0 right-0.5 text-[10px] text-on-surface-variant font-game-plan-serif">b</span><span class="chess-piece">♘</span></div>
+<div class="dark-square flex items-center justify-center relative"><span class="absolute bottom-0 right-0.5 text-[10px] text-on-surface-variant font-game-plan-serif">c</span><span class="chess-piece">♗</span></div>
+<div class="light-square flex items-center justify-center relative"><span class="absolute bottom-0 right-0.5 text-[10px] text-on-surface-variant font-game-plan-serif">d</span><span class="chess-piece">♕</span></div>
+<div class="dark-square flex items-center justify-center relative"><span class="absolute bottom-0 right-0.5 text-[10px] text-on-surface-variant font-game-plan-serif">e</span><span class="chess-piece">♔</span></div>
+<div class="light-square flex items-center justify-center relative"><span class="absolute bottom-0 right-0.5 text-[10px] text-on-surface-variant font-game-plan-serif">f</span><span class="chess-piece">♗</span></div>
+<div class="dark-square flex items-center justify-center relative"><span class="absolute bottom-0 right-0.5 text-[10px] text-on-surface-variant font-game-plan-serif">g</span><span class="chess-piece">♘</span></div>
+<div class="light-square flex items-center justify-center relative"><span class="absolute bottom-0 right-0.5 text-[10px] text-on-surface-variant font-game-plan-serif">h</span><span class="chess-piece">♖</span></div>
+</div>
+</div>
+<!-- Action Buttons -->
+<div class="flex gap-6 mt-3 self-start w-full">
+<button class="text-primary font-body-base text-sm hover:underline transition-colors flex items-center gap-1">
+<span class="material-symbols-outlined text-[16px]">undo</span>
+                    Voltar lance
+                </button>
+<button class="text-primary font-body-base text-sm hover:underline transition-colors flex items-center gap-1">
+<span class="material-symbols-outlined text-[16px]">file_download</span>
+                    Exportar registro
+                </button>
+</div>
+</section>
+<!-- Analysis / Voice Stack -->
+<section class="flex flex-col">
+<!-- Tutor Panel (Top) -->
+<div class="flex flex-col items-center text-center gap-2 py-4 ledger-divider">
+<div class="flex items-center justify-center gap-2 text-primary font-bold font-label-caps text-label-caps uppercase tracking-widest">
+<span class="material-symbols-outlined text-[16px]">school</span>
+                    Nota do tutor
+                </div>
+<p class="text-on-surface font-game-plan-serif font-bold leading-relaxed">
+                    Isso é um erro -- você perdeu cerca de 183 centipeões. A tentativa mais forte era <span class="font-analysis-mono">d2d4</span>. A partir daí, provavelmente segue <span class="font-analysis-mono font-normal">d2d4 e5d4 d1d4 b8c6</span>.
+                </p>
+</div>
+<!-- Move & Opponent Panel (Middle) -->
+<div class="flex flex-col gap-1 py-4 ledger-divider">
+<p class="text-on-surface font-game-plan-serif leading-relaxed text-left">
+<span class="font-analysis-mono text-primary font-bold mr-2">Bxb4</span> — Estou conduzindo isso para um final. Gosto de como estou agora.
+                </p>
+</div>
+<!-- Game Plan Panel (Bottom) -->
+<div class="flex flex-col gap-2 py-4 ledger-divider">
+<p class="text-on-surface-variant font-game-plan-serif text-game-plan-serif italic text-right">
+                    "As peças menores estão sendo trocadas — o foco agora é a estrutura de peões central."
+                </p>
+</div>
+</section>
+<!-- Mistake Summary -->
+<section class="mt-2 pt-2 text-sm text-on-surface-variant font-analysis-mono flex flex-col gap-1 italic">
+<div>Brancas: 0 imprecisões, 2 erros, 0 gafes</div>
+<div>Pretas: 1 imprecisões, 0 erros, 0 gafes</div>
+</section>
+</main>
+</body></html>
