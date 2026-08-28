@@ -118,24 +118,6 @@ body {
   display: none;
 }
 
-/* Third voice/area, distinct from both #status (the GOAT's) and
-   #tutor-panel (the tutor's) -- design.md §5's persistent game plan.
-   Italic and calmer than either: ambient context, not a reaction to the
-   last move. */
-#game-plan-panel {
-  min-height: 1em;
-  margin: 0.5rem 0;
-  padding: 0.5rem 0.75rem;
-  border-left: 4px solid #2f7d6b;
-  background: rgba(47, 125, 107, 0.08);
-  font-style: italic;
-  white-space: pre-line;
-}
-
-#game-plan-panel:empty {
-  display: none;
-}
-
 /* docs/week-5.md session 1: a slim header, title centered between an
    invisible spacer (left) and the one settings trigger (right), so
    removing/adding an icon on one side never re-centers the title. */
@@ -316,26 +298,44 @@ body {
   transform: translateX(1rem);
 }
 
+/* "Take back" / "Export PGN": plain text links near the board, not boxed
+   buttons -- same elements, same behavior, presentation only. */
 #controls {
   display: flex;
-  gap: 0.5rem;
-  align-items: center;
-  margin: 0.5rem 0;
+  justify-content: center;
+  gap: 2rem;
+  margin: 1rem 0;
 }
 
-#status {
-  white-space: pre-line;
-  min-height: 3em;
+#controls button {
+  background: none;
+  border: none;
+  font-family: var(--font-sans);
+  font-size: 0.8rem;
+  font-weight: 300;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--outline);
+  cursor: pointer;
+  padding: 0;
 }
 
-/* Visually distinct from #status -- the tutor is a second voice, not the
-   GOAT's, per design.md §8. */
+#controls button:hover:not(:disabled) {
+  color: var(--on-surface);
+}
+
+/* docs/week-5.md session 3: the three voices told apart by typography
+   alone (alignment + weight + style), not colored cards -- tutor first
+   (centered, bolder: the app's core reason to exist, reacting to the
+   user's own move), opponent second (left-aligned, normal: the GOAT's
+   reply and its own reasoning), game plan last (right-aligned, light
+   italic: the quietest, least-frequently-updated voice, trailing as
+   ambient context). app.js's render functions are unchanged -- this is
+   presentation only. */
 #tutor-panel {
   min-height: 1em;
-  margin: 0.5rem 0;
-  padding: 0.5rem 0.75rem;
-  border-left: 4px solid #6a4c93;
-  background: rgba(106, 76, 147, 0.08);
+  margin: 1.5rem 0;
+  text-align: center;
 }
 
 #tutor-panel:empty {
@@ -344,23 +344,65 @@ body {
 
 #tutor-panel p {
   margin: 0;
+  font-weight: 600;
+  line-height: 1.5;
   white-space: pre-line;
 }
 
 #tutor-panel button {
   display: block;
-  margin-top: 0.5rem;
+  margin: 0.5rem auto 0;
+  background: none;
+  border: none;
+  font-family: var(--font-sans);
+  font-size: 0.8rem;
+  font-weight: 300;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--outline);
+  cursor: pointer;
+  padding: 0;
+}
+
+#tutor-panel button:hover {
+  color: var(--on-surface);
+}
+
+#status {
+  white-space: pre-line;
+  min-height: 3em;
+  text-align: left;
+  font-weight: 400;
+}
+
+#game-plan-panel {
+  min-height: 1em;
+  margin: 1.5rem 0;
+  text-align: right;
+  font-family: var(--font-serif);
+  font-style: italic;
+  font-weight: 400;
+  color: var(--on-surface-variant);
+  white-space: pre-line;
+}
+
+#game-plan-panel:empty {
+  display: none;
 }
 
 #mistake-panel {
   white-space: pre-line;
-  font-size: 0.9em;
-  color: #555;
+  text-align: center;
+  font-size: 0.75rem;
+  letter-spacing: 0.02em;
+  color: var(--on-surface-variant);
+  margin: 1rem 0;
 }
 
 #summary-panel {
   white-space: pre-line;
-  font-weight: bold;
+  text-align: center;
+  font-weight: 600;
   margin: 0.5rem 0;
 }
 
