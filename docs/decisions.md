@@ -164,6 +164,10 @@ ADR is the record that it also matters for style specifically, not only as
 a nice-to-have, and that its absence is a known limitation of what "style"
 means in this app, not a settled design choice.
 
+**Superseded, week 6**: ADR 11 unlocks and builds this. This section
+stays as the historical record of why it was deferred, not as a
+currently-true statement of scope.
+
 ---
 
 ## ADR 6: The page's language switch is client-side, independent of `OUTPUT_LANGUAGE`
@@ -448,3 +452,94 @@ by design, not by accident: it only ever matters when another heuristic
 is actively pulling toward a worse-scored, more volatile candidate in an
 already-sharp position, which is an uncommon combination. This is a real
 trait, correctly scoped, not a heuristic still waiting on more calibration.
+
+---
+
+## ADR 11: A curated opening book, superseding ADR 5's "Rejected for now"
+
+### Context
+
+ADR 5 (`docs/week-1.md`-era) kept `persona.py`'s style as a pure move-time
+filter for v1, explicitly deferring an opening book — "the strongest
+lever for real style" per the chess teacher consulted for this project —
+as a known limitation, not a settled design choice. `CLAUDE.md`'s Scope
+section listed "opening books" as out of phase through week 5.
+`docs/week-6.md` Track B unlocks it, gated on the user supplying a real
+PGN, which arrived as a single complete game (a tactical trap line: 1.Nf3
+e5 2.Nxe5 exploiting a blunder, ending in a forced mate at move 16) —
+confirmed by the user as the real repertoire content to ingest, not a
+placeholder.
+
+Building this also required reconciling it with `CLAUDE.md` invariant 1,
+which read "every move decision comes from Stockfish" — a book move
+comes from curated data instead, on the specific plies where it applies.
+The user approved rewording the invariant before this session started:
+the real rule is "never the language model," not "always Stockfish
+specifically" — a book move is still data plus a deterministic lookup
+rule, a second permitted *source* alongside Stockfish's own, always
+validated legal before being played.
+
+### Decision
+
+- **New pure module, `src/opening_book.py`.** `next_move(move_history,
+  color, style)` returns a UCI move or `None`. Matching is an exact
+  move-sequence prefix — no transposition detection (recognizing the
+  same position via a different move order) — confirmed with the user
+  as an acceptable v1 limitation. Ties within a style resolve to the
+  first matching line, deterministically; `persona.py` must stay a pure
+  function, so no randomness is introduced here.
+- **Lines are tagged by color, and only ever answer for that color.** A
+  single ingested game naturally encodes both sides' moves, but only one
+  side's choices are a real "repertoire" worth reproducing — in the
+  supplied game, White's moves are the deliberate trap, Black's are just
+  how an unprepared opponent responded to it, not something to imitate
+  when the GOAT itself plays Black. Confirmed with the user that this
+  PGN's content should still be ingested as-is; tagging it `color:
+  "white"` only is what keeps a real design principle (a book represents
+  intentional play) from being violated by this specific source game's
+  nature. Data lives at `data/opening_books/<style>.json` — vendored,
+  static, no runtime network, same principle as `web/vendor/fonts`
+  (ADR 9) and `web/vendor/cm-chessboard`.
+- **`persona.choose` gains an optional `move_history` parameter.**
+  `None` (self-play tooling, any older caller) skips the book entirely —
+  identical behavior to today. When provided, the book is consulted
+  after the forced-mate check and before the heuristic filter, and a
+  book move — when found — replaces the filter entirely for that ply
+  (tagged `opening_book`, `reason_score=math.inf`, same convention as
+  `forced_mate`) rather than competing inside it. Confirmed with the
+  user: a book move represents a stronger, more specific preference than
+  the heuristics approximate, so stacking the two added complexity with
+  no clear benefit.
+- **A forced mate still outranks a book move.** `_shortest_forced_mate`
+  runs first, unconditionally, per `design.md` §7 — confirmed with the
+  user this must hold even though it would essentially never matter in
+  practice (mate this early in the opening is not realistic).
+- **Book depth doesn't vary with strength.** Confirmed with the user:
+  curated lines are short enough already that a separate "forget the book
+  sooner at low strength" rule wasn't worth the added complexity for v1.
+- **A book move is asserted legal before being returned**, independent of
+  whether it happens to be one of Stockfish's own top-5 candidates for
+  that position (it usually won't be — that's the point of consulting a
+  book at all). A malformed or transposed entry fails loudly in testing
+  via the assertion, not by playing an illegal move in production.
+- `narration.py` gains an `opening_book` lead phrase in both languages,
+  ranked alongside `forced_mate` at the top of `_LEAD_WEIGHTS` — the
+  offline fallback path (`coach.py`'s own failure mode, design.md §9)
+  must never be silent or wrong for this tag either.
+
+### Rejected alternative
+
+Waiting for a larger, more traditionally "curated" repertoire before
+building any of this. Rejected because the user explicitly confirmed the
+single supplied game should be treated as real content now, and the
+architecture (a list of tagged, matched-by-prefix lines) scales to more
+PGNs later without any change — there was no reason to gate the
+*plumbing* on the *amount* of data behind it.
+
+### Known limitation
+
+The book currently has exactly one line, for White only — Black has no
+book data at all, and will fall through to the heuristic filter on every
+move regardless of what the opponent plays. This is expected, not a bug:
+more lines (for either color) are a data addition to
+`data/opening_books/carlsen.json`, not a code change.

@@ -75,6 +75,27 @@ def test_push_then_pop_restores_original_fen():
     assert game.fen == fen_before
 
 
+def test_move_history_reflects_moves_played_in_order():
+    game = Game()
+
+    assert game.move_history() == []
+
+    game.push("e2e4")
+    game.push("e7e5")
+
+    assert game.move_history() == ["e2e4", "e7e5"]
+
+
+def test_move_history_shrinks_after_pop():
+    game = Game()
+    game.push("e2e4")
+    game.push("e7e5")
+
+    game.pop()
+
+    assert game.move_history() == ["e2e4"]
+
+
 def test_black_user_starts_not_waiting_for_user():
     game = Game(user_color="black")
 

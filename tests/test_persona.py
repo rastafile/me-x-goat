@@ -1,5 +1,7 @@
 import math
 
+import pytest
+
 from src import persona
 from src.engine import Candidate
 from src.persona import Choice, choose
@@ -385,3 +387,63 @@ def test_avoid_chaos_can_change_which_candidate_choose_picks(monkeypatch):
     assert choice.move == "e3e4"
     assert choice.tags == ["improve_worst_piece"]
     assert choice.reason_score == 1.5
+
+
+# --- opening book integration (docs/decisions.md ADR 11) -------------------
+#
+# opening_book.py's own lookup logic has its own tests (test_opening_book.py).
+# These cover only how choose() uses it: monkeypatching persona.book_next_move
+# directly, rather than opening_book's real data, keeps these independent of
+# whatever data/opening_books/carlsen.json happens to contain.
+
+
+def test_book_move_wins_over_the_heuristic_filter(monkeypatch):
+    monkeypatch.setattr(persona, "book_next_move", lambda history, color, style: "e2e4")
+    candidates = [Candidate(move="g1f3", score_cp=20, mate_in=None, pv=["g1f3"])]
+
+    choice = choose(WHITE_TO_MOVE_FEN, candidates, style="carlsen", strength=1400, move_history=[])
+
+    assert choice == Choice(move="e2e4", tags=["opening_book"], reason_score=math.inf)
+
+
+def test_forced_mate_still_wins_over_a_book_move():
+    # design.md #7: a forced mate must outrank a book move if one is
+    # somehow available this early -- book_next_move isn't even patched
+    # here, since _shortest_forced_mate returns before the book is
+    # consulted at all.
+    candidates = [
+        Candidate(move="d1h5", score_cp=None, mate_in=2, pv=["d1h5"]),
+        Candidate(move="g1f3", score_cp=40, mate_in=None, pv=["g1f3"]),
+    ]
+
+    choice = choose(WHITE_TO_MOVE_FEN, candidates, strength=800, move_history=[])
+
+    assert choice.move == "d1h5"
+    assert choice.tags == ["forced_mate"]
+
+
+def test_move_history_none_skips_the_book_lookup_entirely(monkeypatch):
+    def _fail(*args, **kwargs):
+        raise AssertionError("book_next_move should not be called when move_history is None")
+
+    monkeypatch.setattr(persona, "book_next_move", _fail)
+    candidates = [
+        Candidate(move="e1d1", score_cp=80, mate_in=None, pv=["e1d1"]),
+        Candidate(move="d4d5", score_cp=80, mate_in=None, pv=["d4d5"]),
+    ]
+
+    choice = choose(QUEENS_FACING_FEN, candidates, style="carlsen", strength=2400)  # move_history defaults to None
+
+    assert choice.move == "d4d5"  # falls through to the normal heuristic filter, unaffected
+
+
+def test_illegal_book_move_raises_instead_of_being_played(monkeypatch):
+    # a1a2 is illegal in the starting position -- a1 has white's own rook,
+    # a2 has white's own pawn. A malformed or transposed book entry must
+    # fail loudly here, in testing, not play an illegal move in production
+    # (CLAUDE.md invariant 1, docs/week-6.md session 4's contract).
+    monkeypatch.setattr(persona, "book_next_move", lambda history, color, style: "a1a2")
+    candidates = [Candidate(move="g1f3", score_cp=20, mate_in=None, pv=["g1f3"])]
+
+    with pytest.raises(AssertionError):
+        choose(WHITE_TO_MOVE_FEN, candidates, style="carlsen", strength=1400, move_history=[])
