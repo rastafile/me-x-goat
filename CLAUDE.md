@@ -5,8 +5,10 @@ persona and receives analysis from an independent tutor after each of their move
 
 Full spec in `docs/design.md`. Weeks 1-5's plans are in `docs/week-1.md` through
 `docs/week-5.md` (all done — v1 complete, plus the `web/` chrome redesign
-documented in `docs/ui-reference/`). No week-6 plan exists yet. Read the spec
-and the current week's plan before writing code. If this file and the spec
+documented in `docs/ui-reference/`). Current week's plan is in `docs/week-6.md`
+(data-driven weight calibration and a curated opening book — the first two
+items deliberately unlocked from the Scope section below). Read the spec and
+the current week's plan before writing code. If this file and the spec
 disagree, this file wins and the spec should be corrected.
 
 ## Invariants
@@ -14,9 +16,13 @@ disagree, this file wins and the spec should be corrected.
 These are not preferences. Breaking them breaks the product.
 
 1. **The language model never chooses a move.** Every move decision comes from
-   Stockfish, filtered by deterministic rules. The model receives tags and numbers
-   and returns prose. Any implementation where the model decides something about the
-   game is wrong.
+   Stockfish's analysis or a curated, deterministic opening book, filtered by
+   deterministic rules -- never from the language model. The model receives tags and
+   numbers and returns prose. Any implementation where the model decides something
+   about the game is wrong. An opening book move is still data plus a deterministic
+   lookup rule, and it must always be legal in the current position -- it does not
+   get an exception to "no model, no guessing," it is a second permitted *source* of
+   candidate moves alongside Stockfish's own.
 2. **Stockfish is never bundled.** It is an external binary the user installs,
    invoked as a separate process over UCI. This is what keeps the MIT license viable,
    since Stockfish is GPL-3. Do not vendor it, do not commit the binary, do not link
@@ -90,10 +96,14 @@ The week's plan defines what exists. Do not build ahead.
 Not in this phase, however easy it looks:
 
 - styles beyond Carlsen;
-- weight calibration (guess now, measure later);
-- Maia or alternative neural networks, opening books;
+- Maia or alternative neural networks;
 - packaging, Docker, deployment;
 - performance optimization.
+
+Weight calibration and an opening book were also on this list through week 5 --
+week 6 unlocks both deliberately (see `docs/week-6.md` and `docs/decisions.md`
+for the reasoning). Nothing else on this list is unlocked by that precedent;
+each one needs its own explicit decision the same way.
 
 If something seems necessary but sits outside the week's plan, ask before building it.
 
