@@ -55,6 +55,18 @@ def _build_clock(preset: str) -> Clock | None:
     total_ms = minutes * 60_000
     return Clock(white_ms=total_ms, black_ms=total_ms, increment_ms=increment_seconds * 1000)
 
+
+def _timeout_outcome_for(game: Game, flagged_color: str) -> str:
+    """FIDE's own rule: the flagged side loses, unless its opponent has
+    insufficient material to deliver mate under any sequence of legal
+    moves, in which case it's a draw -- python-chess already answers
+    that question, no need to approximate it."""
+    opponent_color = chess.BLACK if flagged_color == "white" else chess.WHITE
+    board = chess.Board(game.fen)
+    if board.has_insufficient_material(opponent_color):
+        return "insufficient_material"
+    return "timeout"
+
 # Same shape and interpolation as persona._margin_cp's table; this is an
 # orchestration decision (how long to let the engine think), which belongs
 # here, not in engine.py or persona.py.
@@ -89,6 +101,10 @@ class NewGameRequest(BaseModel):
 
 class MoveRequest(BaseModel):
     uci: str
+
+
+class TimeoutRequest(BaseModel):
+    color: Literal["white", "black"]
 
 
 class GoatMove(BaseModel):
@@ -162,6 +178,12 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     # None until /new-game picks a preset other than "none" -- untimed
     # play stays completely unaffected (docs/week-7.md).
     app.state.clock = None
+    # Set once a real flag-fall ends the game ("timeout" or, per FIDE,
+    # "insufficient_material" when the non-flagged side can't possibly
+    # mate) -- python-chess's own Termination enum has no timeout value,
+    # and a clock isn't board state, so this lives here, not in game.py
+    # (docs/week-7.md session 1).
+    app.state.timeout_outcome = None
     yield
     engine.close()
 
@@ -186,6 +208,7 @@ def new_game(body: NewGameRequest) -> GameStateResponse:
     app.state.assessment_history = []
     app.state.game_plan = None
     app.state.clock = _build_clock(body.clock)
+    app.state.timeout_outcome = None
     if app.state.clock is not None:
         app.state.clock.start_turn(game.turn, _now_ms())
 
@@ -226,6 +249,7 @@ def new_game(body: NewGameRequest) -> GameStateResponse:
         language=app.state.language,
         game_plan=app.state.game_plan,
         clock=app.state.clock,
+        timeout_outcome=app.state.timeout_outcome,
     )
 
 
@@ -234,15 +258,33 @@ def make_move(body: MoveRequest) -> GameStateResponse:
     game: Game | None = app.state.game
     if game is None:
         raise HTTPException(status_code=400, detail="no game in progress; call /new-game first")
+    if app.state.timeout_outcome is not None:
+        raise HTTPException(status_code=400, detail="the game already ended on time")
 
     # Timestamped and charged to the mover before anything else runs --
     # including move validation itself, so even the small CPU cost of
     # rejecting an illegal move is never refunded as free thinking time.
-    # docs/week-7.md session 1 adds the actual flag check; this session is
-    # only the bookkeeping.
     now = _now_ms()
     mover_before = game.turn
     if app.state.clock is not None:
+        if app.state.clock.is_flagged(mover_before, now):
+            # The request arrived too late -- this mover had already run
+            # out of time as of `now`, before their move is even looked
+            # at. The move itself is never applied.
+            app.state.clock.stop_turn(now)
+            app.state.timeout_outcome = _timeout_outcome_for(game, mover_before)
+            return _state_response(
+                game,
+                goat_move=None,
+                analysis=None,
+                tutor=None,
+                mistake_counts=app.state.mistake_counts,
+                assessment_history=app.state.assessment_history,
+                language=app.state.language,
+                game_plan=app.state.game_plan,
+                clock=app.state.clock,
+                timeout_outcome=app.state.timeout_outcome,
+            )
         app.state.clock.stop_turn(now)
 
     # Capture the pre-move FEN and validate the move (cheap) before spending
@@ -282,10 +324,20 @@ def make_move(body: MoveRequest) -> GameStateResponse:
             goat_move, analysis = _play_goat_move(
                 game, app.state.engine, app.state.style, app.state.strength, app.state.language
             )
+            goat_color = "black" if user_color == "white" else "white"
             if app.state.clock is not None:
                 goat_now = _now_ms()
                 app.state.clock.stop_turn(goat_now)  # charges the GOAT's real analysis time
-                if not game.is_over():
+                if app.state.clock.is_flagged(goat_color, goat_now):
+                    # Vanishingly unlikely at today's analysis times
+                    # (50-800ms/move), but a real edge case worth handling
+                    # correctly: the GOAT never actually finished this
+                    # move in time, so it's undone rather than left
+                    # standing next to a "time forfeit" outcome.
+                    game.pop()
+                    app.state.timeout_outcome = _timeout_outcome_for(game, goat_color)
+                    goat_move, analysis, goat_color = None, None, None
+                elif not game.is_over():
                     app.state.clock.start_turn(game.turn, goat_now)  # the user's turn again
 
         # analysis is the opponent's analysis of the position the user's
@@ -343,6 +395,7 @@ def make_move(body: MoveRequest) -> GameStateResponse:
         language=app.state.language,
         game_plan=app.state.game_plan,
         clock=app.state.clock,
+        timeout_outcome=app.state.timeout_outcome,
     )
 
 
@@ -351,6 +404,13 @@ def take_back() -> GameStateResponse:
     game: Game | None = app.state.game
     if game is None:
         raise HTTPException(status_code=400, detail="no game in progress; call /new-game first")
+    if app.state.timeout_outcome is not None:
+        # Unlike a checkmate (where popping the mating move returns to a
+        # normal, playable position), there's no position to return to
+        # here -- the clock, not the board, ended the game, and this
+        # session doesn't invent a rule for restoring time. Reconsider if
+        # this turns out to matter in practice.
+        raise HTTPException(status_code=400, detail="the game already ended on time")
 
     # Normally two plies -- the user's move and the GOAT's reply -- except
     # right after a Black game's opening, where only the GOAT's single
@@ -377,6 +437,41 @@ def take_back() -> GameStateResponse:
         language=app.state.language,
         game_plan=app.state.game_plan,
         clock=app.state.clock,
+        timeout_outcome=app.state.timeout_outcome,
+    )
+
+
+@app.post("/timeout", response_model=GameStateResponse)
+def timeout(body: TimeoutRequest) -> GameStateResponse:
+    """Called by the client when its own local countdown display reaches
+    zero (docs/week-7.md session 1). The server never trusts that claim
+    directly -- it recomputes real elapsed time itself via Clock.is_flagged.
+    A false alarm (client-side drift firing early, no time control this
+    game, or the game already over) is a harmless no-op, not an error: a
+    race here is expected, not exceptional."""
+    game: Game | None = app.state.game
+    if game is None:
+        raise HTTPException(status_code=400, detail="no game in progress; call /new-game first")
+
+    if (
+        app.state.clock is not None
+        and app.state.timeout_outcome is None
+        and app.state.clock.is_flagged(body.color, _now_ms())
+    ):
+        app.state.clock.stop_turn(_now_ms())
+        app.state.timeout_outcome = _timeout_outcome_for(game, body.color)
+
+    return _state_response(
+        game,
+        goat_move=None,
+        analysis=None,
+        tutor=None,
+        mistake_counts=app.state.mistake_counts,
+        assessment_history=app.state.assessment_history,
+        language=app.state.language,
+        game_plan=app.state.game_plan,
+        clock=app.state.clock,
+        timeout_outcome=app.state.timeout_outcome,
     )
 
 
@@ -429,7 +524,7 @@ def _adjust_mistake_count(
 
 
 def _summary(
-    game: Game,
+    is_over: bool,
     assessment_history: list[tuple[str, Assessment] | None],
     mistake_counts: dict[str, dict[str, int]],
 ) -> SummaryResponse | None:
@@ -437,8 +532,12 @@ def _summary(
     incrementally: take-back already pops that history in lockstep with
     game.pop(), so recomputing "the worst ply so far" from whatever is
     actually left there is correct for free, including across repeated
-    take-backs -- no separate undo logic needed for this."""
-    if not game.is_over():
+    take-backs -- no separate undo logic needed for this.
+
+    `is_over` is the caller's already-combined game.is_over() OR a real
+    timeout (docs/week-7.md session 1) -- the summary is exactly as
+    relevant to a game a clock ended as one the board itself ended."""
+    if not is_over:
         return None
 
     worst: tuple[int, str, Assessment] | None = None
@@ -474,6 +573,7 @@ def _state_response(
     language: str,
     game_plan: str | None,
     clock: Clock | None,
+    timeout_outcome: str | None,
 ) -> GameStateResponse:
     top_candidate: Candidate | None = None
     if analysis is not None and analysis.candidates:
@@ -490,6 +590,13 @@ def _state_response(
             commentary=narrate_assessment(tutor, language),
         )
 
+    # A clock ending the game is not something game.py's board can express
+    # (python-chess's Termination enum has no timeout value) -- combined
+    # here, at the one place both are known, rather than have every caller
+    # remember to OR them together itself.
+    is_over = game.is_over() or timeout_outcome is not None
+    outcome = timeout_outcome if timeout_outcome is not None else game.outcome()
+
     return GameStateResponse(
         fen=game.fen,
         user_color=game.user_color,
@@ -497,12 +604,12 @@ def _state_response(
         goat_move=goat_move,
         tutor=tutor_response,
         mistake_counts=mistake_counts,
-        summary=_summary(game, assessment_history, mistake_counts),
+        summary=_summary(is_over, assessment_history, mistake_counts),
         evaluation=_evaluation_for_user(top_candidate, game.user_color),
         mate_in=_mate_in_for_user(top_candidate, game.user_color),
         game_plan=game_plan,
-        is_over=game.is_over(),
-        outcome=game.outcome(),
+        is_over=is_over,
+        outcome=outcome,
         white_time_ms=clock.remaining_ms("white") if clock is not None else None,
         black_time_ms=clock.remaining_ms("black") if clock is not None else None,
     )
