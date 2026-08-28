@@ -117,22 +117,24 @@
   <div id="board"></div>
 </div>
 
-<!-- design.md §5: persistent, rewritten only on a structural transition --
-     a third voice/area, distinct from both the GOAT's (#status) and the
-     tutor's (#tutor-panel). Empty until the first transition fires. -->
-<div id="game-plan-panel"></div>
-
 <div id="controls">
   <button type="button" id="take-back-button" data-i18n="takeBack" disabled>Take back</button>
   <button type="button" id="export-pgn-button" data-i18n="exportPgn" disabled>Export PGN</button>
 </div>
 
+<!-- docs/week-5.md session 3: tutor -> opponent -> game plan, chronological
+     order within a round (the tutor reacts to the user's own move before
+     the GOAT ever replies, and it's the app's core reason to exist --
+     docs/ui-reference/README.md). Three voices, three places, told apart
+     by typography alone now (centered/bolder, left-aligned/normal,
+     right-aligned/italic) rather than the colored-card treatment week 3
+     built -- app.js's render functions are untouched, only what CSS they
+     render into changed order and style. -->
+<div id="tutor-panel"></div>
+
 <div id="status"></div>
 
-<!-- Visually distinct from #status (the GOAT's own voice) per design.md
-     §8: "Tutor panel and GOAT panel visually distinct -- two voices, two
-     places." Populated only after the user's own moves. -->
-<div id="tutor-panel"></div>
+<div id="game-plan-panel"></div>
 
 <div id="mistake-panel"></div>
 
