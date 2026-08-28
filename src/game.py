@@ -57,6 +57,11 @@ class Game:
     def legal_moves(self) -> list[str]:
         return [move.uci() for move in self._board.legal_moves]
 
+    def move_history(self) -> list[str]:
+        """UCI moves played so far, in order -- opening_book.py matches
+        against this to decide whether the game is still in book."""
+        return [move.uci() for move in self._board.move_stack]
+
     def push(self, uci: str) -> None:
         try:
             move = chess.Move.from_uci(uci)

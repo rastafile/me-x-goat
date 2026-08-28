@@ -3,13 +3,15 @@
 A local chess study app. The user plays against an opponent with a grandmaster
 persona and receives analysis from an independent tutor after each of their moves.
 
-Full spec in `docs/design.md`. Weeks 1-5's plans are in `docs/week-1.md` through
-`docs/week-5.md` (all done — v1 complete, plus the `web/` chrome redesign
-documented in `docs/ui-reference/`). Current week's plan is in `docs/week-6.md`
-(data-driven weight calibration and a curated opening book — the first two
-items deliberately unlocked from the Scope section below). Read the spec and
-the current week's plan before writing code. If this file and the spec
-disagree, this file wins and the spec should be corrected.
+Full spec in `docs/design.md`. Weeks 1-6's plans are in `docs/week-1.md` through
+`docs/week-6.md` (all done — v1 complete, the `web/` chrome redesign documented
+in `docs/ui-reference/`, and week 6's data-driven weight calibration plus a
+curated opening book, both deliberately unlocked from the Scope section
+below). `docs/week-6-ux-quickfix.md` is a small out-of-band session (play
+immediately on load) that ran alongside week 6. No week-7 plan exists yet —
+a chess clock is a candidate, not yet scoped. Read the spec and the current
+week's plan before writing code. If this file and the spec disagree, this
+file wins and the spec should be corrected.
 
 ## Invariants
 

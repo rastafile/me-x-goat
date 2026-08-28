@@ -320,7 +320,9 @@ def _play_goat_move(
 ) -> tuple[GoatMove, Analysis]:
     analysis = _analyse_with_retry(engine, game.fen, _movetime_ms(strength))
     board_before = chess.Board(game.fen)
-    result = choose(game.fen, analysis.candidates, style=style, strength=strength)
+    result = choose(
+        game.fen, analysis.candidates, style=style, strength=strength, move_history=game.move_history()
+    )
     game.push(result.move)
     san = board_before.san(chess.Move.from_uci(result.move))
     # narrate_goat_move expects `game` to already reflect the position after

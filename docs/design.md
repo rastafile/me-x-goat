@@ -16,8 +16,10 @@ training tool.
 
 ## 2. Premises
 
-- **The LLM does not play chess.** Every move choice and every numeric evaluation
-  comes from Stockfish. The language model only narrates. That separation is what
+- **The LLM does not play chess.** Every move choice comes from Stockfish's
+  analysis or a curated, deterministic opening book (`docs/decisions.md` ADR 11)
+  — never the language model — and every numeric evaluation comes from
+  Stockfish. The language model only narrates. That separation is what
   prevents illegal moves and invented evaluations.
 - **Strength is adjustable.** A grandmaster at full strength teaches a beginner
   nothing. The persona keeps its style at any strength level.
@@ -118,8 +120,12 @@ Stockfish instance. The two narration calls are independent and run in parallel.
 
 ## 5. The GOAT persona
 
-`persona.py` receives the five best moves with their evaluations. It discards any
-that fall outside a tolerance margin. Among the rest, it scores each one against the
+`persona.py` first checks `src/opening_book.py` (`docs/decisions.md` ADR 11):
+while the game so far matches a curated line for the current style and color,
+the book's move is played outright, ahead of everything below. Once the game
+leaves book — or for any move a style has no book data for — `persona.py`
+receives the five best moves with their evaluations. It discards any that fall
+outside a tolerance margin. Among the rest, it scores each one against the
 selected style's heuristics and picks the highest.
 
 Carlsen-style heuristics (v1):
@@ -327,13 +333,17 @@ app work offline.
 - Analysis of external games imported by PGN.
 - Packaged application. v1 starts from the command line.
 
-### Known limitation: no opening book
+### Known limitation: a minimal opening book
 
-Not simply deferred infrastructure, the way the items above are — its absence is
-a known limitation of what "style" means in v1. A chess teacher consulted for
-this project holds that a player's identity lives in their repertoire, not in
-move-time preferences; the style filter (§5) approximates character without
-one. See `docs/decisions.md` ADR 5.
+A chess teacher consulted for this project holds that a player's identity
+lives in their repertoire, not in move-time preferences; the style filter
+(§5) alone approximates character without one. Week 6 (`docs/decisions.md`
+ADR 11, superseding ADR 5's original deferral) added `src/opening_book.py`
+— curated, move-sequence-matched lines that take priority over the
+move-time filter while the game stays in book. It remains genuinely
+minimal: one line, for White only, sourced from a single user-supplied
+game. More lines are a data addition to `data/opening_books/carlsen.json`,
+not a code change.
 
 ## 12. Build order
 

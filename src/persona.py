@@ -10,6 +10,7 @@ from dataclasses import dataclass
 import chess
 
 from src.engine import Candidate
+from src.opening_book import next_move as book_next_move
 
 _SHORT_MATE_MAX = 3  # design.md #7: the GOAT always executes mate up to here
 
@@ -156,10 +157,26 @@ def choose(
     candidates: list[Candidate],
     style: str = "carlsen",
     strength: int = 1400,
+    move_history: list[str] | None = None,
 ) -> Choice:
     forced_mate = _shortest_forced_mate(candidates)
     if forced_mate is not None:
         return Choice(move=forced_mate.move, tags=["forced_mate"], reason_score=math.inf)
+
+    # docs/decisions.md ADR 11: a book move, while the game is still in
+    # book, replaces the style filter entirely rather than competing
+    # inside it -- it represents a stronger, more specific preference than
+    # the heuristics below approximate. Still subordinate to a forced mate
+    # above, per design.md #7. `move_history=None` (self-play tooling,
+    # older callers) simply skips this -- same as no book match.
+    if move_history is not None:
+        white_to_move = board_fen.split()[1] == "w"
+        book_move = book_next_move(move_history, "white" if white_to_move else "black", style)
+        if book_move is not None:
+            board = chess.Board(board_fen)
+            move = chess.Move.from_uci(book_move)
+            assert move in board.legal_moves, f"opening book move {book_move!r} illegal in {board_fen!r}"
+            return Choice(move=book_move, tags=["opening_book"], reason_score=math.inf)
 
     # The heuristics all reason in centipawns; a mate longer than the
     # short-mate cutoff has no score_cp and so never competes below. It is

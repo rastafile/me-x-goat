@@ -27,6 +27,7 @@ _MEANINGFUL_EVAL_CP = 100  # guess, calibrate alongside the other thresholds
 _LEAD_PHRASES: dict[str, dict[str, str]] = {
     "en-US": {
         "forced_mate": "I found a forced mate.",
+        "opening_book": "This is a line I know well.",
         "queen_trade": "I'm trading queens while I'm ahead.",
         "toward_endgame": "I'm steering this into an endgame.",
         "improve_worst_piece": "I'm improving my worst-placed piece.",
@@ -35,6 +36,7 @@ _LEAD_PHRASES: dict[str, dict[str, str]] = {
     },
     "pt-BR": {
         "forced_mate": "Encontrei um mate forçado.",
+        "opening_book": "Essa é uma linha que conheço bem.",
         "queen_trade": "Estou trocando as damas enquanto estou à frente.",
         "toward_endgame": "Estou conduzindo isso para um final.",
         "improve_worst_piece": "Estou melhorando minha peça pior posicionada.",
@@ -73,9 +75,12 @@ _NEGATIVE_EVAL_PHRASE: dict[str, str] = {
     "pt-BR": "Gosto de como estou agora.",
 }
 
-# forced_mate isn't a style heuristic -- it overrides them in choose() -- but
-# it needs to outrank everything when picking which fired tag leads.
-_LEAD_WEIGHTS: dict[str, float] = {**WEIGHTS, "forced_mate": math.inf}
+# forced_mate and opening_book aren't style heuristics -- they override them
+# in choose() -- but they need to outrank everything when picking which
+# fired tag leads. In practice choice.tags never has more than one of these
+# (choose() returns immediately once either fires), so this ranking never
+# actually has to arbitrate between the two.
+_LEAD_WEIGHTS: dict[str, float] = {**WEIGHTS, "forced_mate": math.inf, "opening_book": math.inf}
 
 # design.md §6's asymmetric commentary rule: good moves get one line (or
 # silence -- here, still one short line, since AssessmentResponse.commentary

@@ -37,6 +37,16 @@ def test_forced_mate_always_leads_over_style_tags():
     assert describe_move(analysis, choice, game, "pt-BR").startswith("Encontrei um mate forçado.")
 
 
+def test_opening_book_always_leads_over_style_tags():
+    candidate = Candidate(move="g1f3", score_cp=20, mate_in=None, pv=["g1f3"])
+    analysis = _analysis([candidate])
+    choice = Choice(move="g1f3", tags=["opening_book"], reason_score=float("inf"))
+    game = Game(user_color="white")
+
+    assert describe_move(analysis, choice, game, "en-US").startswith("This is a line I know well.")
+    assert describe_move(analysis, choice, game, "pt-BR").startswith("Essa é uma linha que conheço bem.")
+
+
 def test_no_tags_falls_back_to_a_generic_line():
     candidate = Candidate(move="e2e4", score_cp=10, mate_in=None, pv=["e2e4"])
     analysis = _analysis([candidate])
