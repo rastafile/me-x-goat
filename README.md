@@ -34,12 +34,14 @@ Offline play is a requirement, not a fallback.
 
 ## Status
 
-v1 complete, built in the open over four weeks.
+v1 complete, built in the open over five weeks.
 
 - [x] Week 1 — engine, game state, style filter (playable in the terminal)
 - [x] Week 2 — HTTP server, draggable board, themes
 - [x] Week 3 — the tutor
 - [x] Week 4 — narration layer, mate badge, tests, v1
+- [x] Week 5 — interface redesign (header/settings, mate badge and evaluation
+      bar restyle, voice panel reorder)
 
 ## Requirements
 

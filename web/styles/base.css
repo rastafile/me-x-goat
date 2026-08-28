@@ -48,7 +48,12 @@
   --surface-container-high: #eae8e4;
   --on-surface: #1c1c1a;
   --on-surface-variant: #444748;
-  --outline: #747878;
+  /* Darker than DESIGN-SYSTEM.md's own #747878 -- that value is 4.26:1
+     against --surface, short of WCAG AA's 4.5:1 for normal text, and this
+     token is used as real text color (settings-choice, controls,
+     take-back button), not just a decorative line. #666a6a clears 5.2:1,
+     found during week 5 session 4's cross-theme/accessibility check. */
+  --outline: #666a6a;
   --outline-variant: #c4c7c7;
   --primary: #1c1c1a;
   --on-primary: #ffffff;
