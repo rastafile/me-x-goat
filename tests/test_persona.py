@@ -253,7 +253,10 @@ def test_keep_tension_still_fires_for_an_unrelated_move_in_that_same_position():
 # --- avoid_chaos -------------------------------------------------------
 
 
-def test_avoid_chaos_fires_on_a_high_spread():
+def test_avoid_chaos_does_not_penalize_the_top_scored_candidate():
+    # e2e4 (300) is the engine's actual best line in this candidate set --
+    # even in a chaotic position (spread 250 > 150), the calmest option
+    # available (the one closest to that best line) draws no penalty.
     candidates = [
         Candidate(move="e2e4", score_cp=300, mate_in=None, pv=["e2e4"]),
         Candidate(move="d2d4", score_cp=50, mate_in=None, pv=["d2d4"]),
@@ -261,7 +264,37 @@ def test_avoid_chaos_fires_on_a_high_spread():
 
     contribution, tag = persona.avoid_chaos(WHITE_TO_MOVE_FEN, candidates[0], candidates)
 
-    assert (contribution, tag) == (-1.0, "avoid_chaos")
+    assert (contribution, tag) == (0.0, None)
+
+
+def test_avoid_chaos_fully_penalizes_the_most_deviated_candidate():
+    # Regression for the week-6 finding: this used to penalize every
+    # survivor in a chaotic position identically, so it could never change
+    # which one won (0 of 3905 firings decisive in self-play data). d2d4 is
+    # the full spread away from the position's best line (e2e4) -- it draws
+    # the full weight as a penalty, not a shared, order-blind one.
+    candidates = [
+        Candidate(move="e2e4", score_cp=300, mate_in=None, pv=["e2e4"]),
+        Candidate(move="d2d4", score_cp=50, mate_in=None, pv=["d2d4"]),
+    ]
+
+    contribution, tag = persona.avoid_chaos(WHITE_TO_MOVE_FEN, candidates[1], candidates)
+
+    assert (contribution, tag) == (-1.5, "avoid_chaos")
+
+
+def test_avoid_chaos_penalty_is_proportional_between_the_extremes():
+    # A third candidate roughly midway between the best line (300) and the
+    # worst (50) should draw roughly half the penalty, not the full amount.
+    candidates = [
+        Candidate(move="e2e4", score_cp=300, mate_in=None, pv=["e2e4"]),
+        Candidate(move="g1f3", score_cp=175, mate_in=None, pv=["g1f3"]),
+        Candidate(move="d2d4", score_cp=50, mate_in=None, pv=["d2d4"]),
+    ]
+
+    contribution, tag = persona.avoid_chaos(WHITE_TO_MOVE_FEN, candidates[1], candidates)
+
+    assert (contribution, tag) == (-0.75, "avoid_chaos")
 
 
 def test_avoid_chaos_does_not_fire_on_a_low_spread():
@@ -326,3 +359,29 @@ def test_returned_tags_match_the_heuristics_that_actually_fired():
             "avoid_chaos",
         }
     assert choice.tags == ["queen_trade", "toward_endgame"]
+
+
+def test_avoid_chaos_can_change_which_candidate_choose_picks(monkeypatch):
+    # e3d4 captures (toward_endgame, +2.5) and shares e3 as its from-square
+    # with e3e4, so improve_worst_piece contributes equally to both and
+    # cancels out of the comparison -- only toward_endgame and avoid_chaos
+    # actually differ here. e3d4 is also the full spread away from the
+    # position's best line (300 vs 140, spread 160 > 150), so with
+    # avoid_chaos weighted enough to outweigh toward_endgame's pull, the
+    # calmer, better-scored e3e4 wins instead.
+    #
+    # The weight here is chosen only to prove the mechanism can be decisive
+    # at all -- independent of whatever WEIGHTS["avoid_chaos"] settles on
+    # for real play. Regression for the week-6 finding that, as originally
+    # written, no weight could ever make this heuristic change a choice.
+    monkeypatch.setitem(persona.WEIGHTS, "avoid_chaos", 5.0)
+    candidates = [
+        Candidate(move="e3e4", score_cp=300, mate_in=None, pv=["e3e4"]),
+        Candidate(move="e3d4", score_cp=140, mate_in=None, pv=["e3d4"]),
+    ]
+
+    choice = choose(PAWN_CAN_CAPTURE_KNIGHT_FEN, candidates, style="carlsen", strength=800)
+
+    assert choice.move == "e3e4"
+    assert choice.tags == ["improve_worst_piece"]
+    assert choice.reason_score == 1.5

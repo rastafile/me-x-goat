@@ -167,7 +167,22 @@ def main() -> int:
     parser.add_argument("--games", type=int, default=20, help="games per strength")
     parser.add_argument("--stockfish-path", default=os.environ.get("STOCKFISH_PATH", "stockfish"))
     parser.add_argument("--output", help="optional path to also write the summaries as JSON")
+    parser.add_argument(
+        "--weight",
+        action="append",
+        default=[],
+        metavar="TAG=VALUE",
+        help="override one WEIGHTS entry for this run only, e.g. --weight avoid_chaos=3.0 "
+        "-- for exploring a calibration candidate before committing it to persona.py",
+    )
     args = parser.parse_args()
+
+    for override in args.weight:
+        tag, _, value = override.partition("=")
+        if tag not in WEIGHTS:
+            print(f"error: unknown weight tag {tag!r}", file=sys.stderr)
+            return 1
+        WEIGHTS[tag] = float(value)
 
     try:
         engine = Engine(path=args.stockfish_path)

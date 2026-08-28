@@ -130,7 +130,7 @@ Carlsen-style heuristics (v1):
 | `toward_endgame` | Reduces total material without losing evaluation | high |
 | `improve_worst_piece` | Moves the piece with the lowest mobility on the board | medium |
 | `keep_tension` | Declines to resolve a central pawn tension | medium |
-| `avoid_chaos` | Penalizes lines with high variance across candidates | medium |
+| `avoid_chaos` | In a high-variance position, penalizes this move in proportion to how far it sits from the best-scored candidate | medium |
 
 Tags travel with the move all the way to `coach.py`, which uses them as raw material
 for the text. This guarantees the explanation matches the actual reason for the
