@@ -98,6 +98,12 @@ setLanguage(initialLanguage)
 mateBadgeToggle.checked = loadStoredMateBadgeEnabled()
 evalBarToggle.checked = loadStoredEvalBarEnabled()
 renderEvalBar(null, null)
+// docs/week-6-ux-quickfix.md: without this, the page loads into a dead
+// state -- pieces visible, nothing playable -- until the user finds and
+// opens the settings drawer and picks a color. Same call a color button's
+// click already makes, just made once automatically on load, for whichever
+// color the settings panel already shows as active (white by default).
+startNewGame(colorChoices.querySelector(".is-active").dataset.color)
 
 function loadStoredTheme() {
     try {
