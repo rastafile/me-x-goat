@@ -7,6 +7,7 @@ app, not a multi-tenant service. No sessions, no auth, no game IDs.
 
 import os
 import sys
+import time
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -18,6 +19,7 @@ from fastapi.responses import FileResponse, PlainTextResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
+from src.clock import Clock
 from src.coach import narrate_assessment, narrate_goat_move, narrate_transition
 from src.engine import Analysis, Candidate, Engine, EngineUnavailable
 from src.game import Game, IllegalMove, PhaseSignature
@@ -26,6 +28,32 @@ from src.persona import choose
 from src.tutor import Assessment, assess
 
 _WEB_DIR = Path(__file__).resolve().parent.parent / "web"
+
+# docs/week-7.md: (minutes, increment seconds) per preset -- "none" means
+# no time control at all, app.state.clock stays None, and every clock
+# field on GameStateResponse stays None too. No free-form input for v1.
+_CLOCK_PRESETS: dict[str, tuple[int, int] | None] = {
+    "none": None,
+    "bullet": (1, 0),
+    "blitz": (3, 2),
+    "rapid": (10, 5),
+    "classical": (30, 0),
+}
+
+
+def _now_ms() -> int:
+    # Monotonic, not wall time: a system clock adjustment mid-game must
+    # never shorten or lengthen anyone's remaining time.
+    return int(time.monotonic() * 1000)
+
+
+def _build_clock(preset: str) -> Clock | None:
+    values = _CLOCK_PRESETS[preset]
+    if values is None:
+        return None
+    minutes, increment_seconds = values
+    total_ms = minutes * 60_000
+    return Clock(white_ms=total_ms, black_ms=total_ms, increment_ms=increment_seconds * 1000)
 
 # Same shape and interpolation as persona._margin_cp's table; this is an
 # orchestration decision (how long to let the engine think), which belongs
@@ -56,6 +84,7 @@ class NewGameRequest(BaseModel):
     # DEFAULT_LANGUAGE, not reject the request -- same rule web/i18n.js
     # already applies client-side, kept in _new_game_language below.
     language: str = DEFAULT_LANGUAGE
+    clock: Literal["none", "bullet", "blitz", "rapid", "classical"] = "none"
 
 
 class MoveRequest(BaseModel):
@@ -98,6 +127,8 @@ class GameStateResponse(BaseModel):
     game_plan: str | None
     is_over: bool
     outcome: str | None
+    white_time_ms: int | None
+    black_time_ms: int | None
 
 
 @asynccontextmanager
@@ -128,6 +159,9 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     # ended the game). /take-back pops this alongside game.pop() to undo
     # whatever mistake count that ply had added.
     app.state.assessment_history = []
+    # None until /new-game picks a preset other than "none" -- untimed
+    # play stays completely unaffected (docs/week-7.md).
+    app.state.clock = None
     yield
     engine.close()
 
@@ -151,6 +185,9 @@ def new_game(body: NewGameRequest) -> GameStateResponse:
     app.state.mistake_counts = _fresh_mistake_counts()
     app.state.assessment_history = []
     app.state.game_plan = None
+    app.state.clock = _build_clock(body.clock)
+    if app.state.clock is not None:
+        app.state.clock.start_turn(game.turn, _now_ms())
 
     goat_move, analysis = None, None
     if not game.waiting_for_user:
@@ -166,6 +203,13 @@ def new_game(body: NewGameRequest) -> GameStateResponse:
             raise HTTPException(
                 status_code=503, detail="the chess engine is unavailable; game not started"
             ) from exc
+        if app.state.clock is not None:
+            # The GOAT's own opening move (user chose black) -- its
+            # "thinking time" is whatever wall-clock time _play_goat_move
+            # above actually took, same mechanism as every later round.
+            now = _now_ms()
+            app.state.clock.stop_turn(now)
+            app.state.clock.start_turn(game.turn, now)  # now it's the user's turn
         app.state.assessment_history.append(None)  # opening move, not assessed
         # A single opening move can never trigger a transition (queens_off
         # needs a capture, file_opens needs every pawn off a file, and
@@ -181,6 +225,7 @@ def new_game(body: NewGameRequest) -> GameStateResponse:
         assessment_history=app.state.assessment_history,
         language=app.state.language,
         game_plan=app.state.game_plan,
+        clock=app.state.clock,
     )
 
 
@@ -189,6 +234,16 @@ def make_move(body: MoveRequest) -> GameStateResponse:
     game: Game | None = app.state.game
     if game is None:
         raise HTTPException(status_code=400, detail="no game in progress; call /new-game first")
+
+    # Timestamped and charged to the mover before anything else runs --
+    # including move validation itself, so even the small CPU cost of
+    # rejecting an illegal move is never refunded as free thinking time.
+    # docs/week-7.md session 1 adds the actual flag check; this session is
+    # only the bookkeeping.
+    now = _now_ms()
+    mover_before = game.turn
+    if app.state.clock is not None:
+        app.state.clock.stop_turn(now)
 
     # Capture the pre-move FEN and validate the move (cheap) before spending
     # an analyse() call (not cheap) on it -- an illegal move should never
@@ -199,7 +254,12 @@ def make_move(body: MoveRequest) -> GameStateResponse:
     try:
         game.push(body.uci)
     except IllegalMove as exc:
+        if app.state.clock is not None:
+            app.state.clock.start_turn(mover_before, now)  # still their turn -- resume ticking
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    if app.state.clock is not None and not game.is_over():
+        app.state.clock.start_turn(game.turn, now)  # the GOAT's own thinking time, about to start
 
     user_color = game.user_color
     goat_move: GoatMove | None = None
@@ -222,6 +282,11 @@ def make_move(body: MoveRequest) -> GameStateResponse:
             goat_move, analysis = _play_goat_move(
                 game, app.state.engine, app.state.style, app.state.strength, app.state.language
             )
+            if app.state.clock is not None:
+                goat_now = _now_ms()
+                app.state.clock.stop_turn(goat_now)  # charges the GOAT's real analysis time
+                if not game.is_over():
+                    app.state.clock.start_turn(game.turn, goat_now)  # the user's turn again
 
         # analysis is the opponent's analysis of the position the user's
         # move left behind -- exactly the "after" half tutor.assess needs,
@@ -244,6 +309,12 @@ def make_move(body: MoveRequest) -> GameStateResponse:
     except EngineUnavailable as exc:
         while game.ply_count > ply_count_before:
             game.pop()
+        if app.state.clock is not None:
+            # Full rollback to ply_count_before -- "your move was not
+            # applied" means no one should be charged for this attempt
+            # either, regardless of which analyse() call inside this block
+            # actually failed. The user's turn resumes now.
+            app.state.clock.start_turn(mover_before, _now_ms())
         raise HTTPException(
             status_code=503, detail="the chess engine is unavailable; your move was not applied"
         ) from exc
@@ -271,6 +342,7 @@ def make_move(body: MoveRequest) -> GameStateResponse:
         assessment_history=app.state.assessment_history,
         language=app.state.language,
         game_plan=app.state.game_plan,
+        clock=app.state.clock,
     )
 
 
@@ -304,6 +376,7 @@ def take_back() -> GameStateResponse:
         assessment_history=app.state.assessment_history,
         language=app.state.language,
         game_plan=app.state.game_plan,
+        clock=app.state.clock,
     )
 
 
@@ -400,6 +473,7 @@ def _state_response(
     assessment_history: list[tuple[str, Assessment] | None],
     language: str,
     game_plan: str | None,
+    clock: Clock | None,
 ) -> GameStateResponse:
     top_candidate: Candidate | None = None
     if analysis is not None and analysis.candidates:
@@ -429,6 +503,8 @@ def _state_response(
         game_plan=game_plan,
         is_over=game.is_over(),
         outcome=game.outcome(),
+        white_time_ms=clock.remaining_ms("white") if clock is not None else None,
+        black_time_ms=clock.remaining_ms("black") if clock is not None else None,
     )
 
 

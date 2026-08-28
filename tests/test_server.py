@@ -674,3 +674,48 @@ def test_get_pgn_with_no_game_in_progress_is_rejected(client):
     response = client.get("/pgn")
 
     assert response.status_code == 400
+
+
+# --- clock (docs/week-7.md session 0) --------------------------------------
+
+
+@pytest.mark.integration
+def test_new_game_without_a_clock_preset_has_no_time_fields(client):
+    response = client.post("/new-game", json={"color": "white"})
+
+    data = response.json()
+    assert data["white_time_ms"] is None
+    assert data["black_time_ms"] is None
+
+
+@pytest.mark.integration
+def test_new_game_with_a_clock_preset_starts_both_sides_at_full_time(client):
+    response = client.post("/new-game", json={"color": "white", "clock": "blitz"})
+
+    data = response.json()
+    assert data["white_time_ms"] == 3 * 60_000
+    assert data["black_time_ms"] == 3 * 60_000
+
+
+@pytest.mark.integration
+def test_a_move_deducts_the_goats_real_analysis_time(client):
+    # Bullet has no increment (1+0) -- with blitz's +2s increment, a fast
+    # enough reply can leave the mover with *more* time than it started
+    # with, which is correct Fischer-increment behavior, just not what
+    # this test is isolating.
+    client.post("/new-game", json={"color": "white", "clock": "bullet"})
+
+    response = client.post("/move", json={"uci": "e2e4"})
+
+    data = response.json()
+    assert data["black_time_ms"] < 1 * 60_000  # the GOAT's own reply took real wall time
+    assert data["white_time_ms"] <= 1 * 60_000  # never increases
+
+
+@pytest.mark.integration
+def test_goats_opening_move_as_black_user_deducts_from_the_goats_own_clock(client):
+    response = client.post("/new-game", json={"color": "black", "clock": "bullet"})
+
+    data = response.json()
+    assert data["white_time_ms"] < 1 * 60_000  # the GOAT just moved first, as white
+    assert data["black_time_ms"] == 1 * 60_000  # untouched -- the user hasn't moved yet
