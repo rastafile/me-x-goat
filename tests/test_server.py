@@ -17,6 +17,7 @@ from unittest.mock import MagicMock
 import pytest
 from fastapi.testclient import TestClient
 
+from src.clock import Clock
 from src.engine import Analysis, Candidate, EngineUnavailable
 from src.game import Game, PhaseSignature
 from src.narration import DEFAULT_LANGUAGE
@@ -48,6 +49,9 @@ CHECKMATED_FEN = "rnb1kbnr/pppp1ppp/8/4p3/6Pq/5P2/PPPPP2P/RNBQKBNR w KQkq - 1 3"
 # a rook is enough of an edge to show up as a plain cp score instead.
 WHITE_UP_A_ROOK_FEN = "1nbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQk - 0 1"
 BLACK_UP_A_ROOK_FEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/1NBQKBNR b KQk - 0 1"
+# Black is a bare king -- has_insufficient_material(BLACK) is True, so if
+# white flags here, black (the would-be winner) can never actually mate.
+BLACK_BARE_KING_FEN = "4k3/8/8/8/8/8/8/4KQ2 w - - 0 1"
 
 
 @pytest.fixture
@@ -213,19 +217,16 @@ def test_track_assessment_does_not_count_excellent_or_good():
 
 
 def test_summary_is_none_while_the_game_is_still_in_progress():
-    game = Game(fen=START_FEN)
     counts = _fresh_mistake_counts()
     blunder = Assessment(
         classification="blunder", loss_cp=500, best_move="e2e4", continuation=["e2e4"], offer_take_back=True
     )
 
-    assert _summary(game, [("white", blunder)], counts) is None
+    assert _summary(False, [("white", blunder)], counts) is None
 
 
 def test_summary_names_the_ply_and_color_of_the_worst_move():
-    # A short scripted "game" (history is hand-built, not actually played) --
-    # only game.is_over() needs to be real, so a real checkmate FEN stands in.
-    game = Game(fen=CHECKMATED_FEN)
+    # A short scripted "game" -- history is hand-built, not actually played.
     counts = _fresh_mistake_counts()
     history = [
         ("white", Assessment(classification="good", loss_cp=15, best_move=None, continuation=[], offer_take_back=False)),
@@ -239,7 +240,7 @@ def test_summary_names_the_ply_and_color_of_the_worst_move():
         ("black", Assessment(classification="inaccuracy", loss_cp=60, best_move=None, continuation=[], offer_take_back=False)),
     ]
 
-    summary = _summary(game, history, counts)
+    summary = _summary(True, history, counts)
 
     assert summary is not None
     assert summary.decided_at_ply == 3
@@ -251,7 +252,6 @@ def test_summary_names_the_ply_and_color_of_the_worst_move():
 def test_summary_is_present_even_in_a_clean_game_with_no_move_above_good():
     # There is always a worst move, even when nothing was ever a mistake --
     # the summary should still name whichever small loss was the largest.
-    game = Game(fen=CHECKMATED_FEN)
     counts = _fresh_mistake_counts()
     history = [
         ("white", Assessment(classification="excellent", loss_cp=0, best_move=None, continuation=[], offer_take_back=False)),
@@ -259,7 +259,7 @@ def test_summary_is_present_even_in_a_clean_game_with_no_move_above_good():
         ("white", Assessment(classification="excellent", loss_cp=5, best_move=None, continuation=[], offer_take_back=False)),
     ]
 
-    summary = _summary(game, history, counts)
+    summary = _summary(True, history, counts)
 
     assert summary is not None
     assert summary.decided_at_ply == 2
@@ -271,14 +271,13 @@ def test_summary_skips_untracked_plies_when_finding_the_worst_move():
     # None entries stand for untracked plies (the black-opening move, or a
     # move that ended the game with no "after" position) and must not crash
     # or be mistaken for a zero-loss move.
-    game = Game(fen=CHECKMATED_FEN)
     counts = _fresh_mistake_counts()
     history = [
         None,
         ("black", Assessment(classification="mistake", loss_cp=120, best_move="e7e5", continuation=[], offer_take_back=True)),
     ]
 
-    summary = _summary(game, history, counts)
+    summary = _summary(True, history, counts)
 
     assert summary is not None
     assert summary.decided_at_ply == 2
@@ -287,10 +286,9 @@ def test_summary_skips_untracked_plies_when_finding_the_worst_move():
 
 
 def test_summary_is_none_when_every_ply_is_untracked():
-    game = Game(fen=CHECKMATED_FEN)
     counts = _fresh_mistake_counts()
 
-    assert _summary(game, [None, None], counts) is None
+    assert _summary(True, [None, None], counts) is None
 
 
 @pytest.mark.integration
@@ -719,3 +717,91 @@ def test_goats_opening_move_as_black_user_deducts_from_the_goats_own_clock(clien
     data = response.json()
     assert data["white_time_ms"] < 1 * 60_000  # the GOAT just moved first, as white
     assert data["black_time_ms"] == 1 * 60_000  # untouched -- the user hasn't moved yet
+
+
+# --- timeout as a real game-over outcome (docs/week-7.md session 1) --------
+
+
+@pytest.mark.integration
+def test_timeout_ends_the_game_when_the_color_has_actually_flagged(client):
+    client.post("/new-game", json={"color": "white"})
+    app.state.clock = Clock(white_ms=0, black_ms=60_000, increment_ms=0)
+
+    response = client.post("/timeout", json={"color": "white"})
+
+    data = response.json()
+    assert data["is_over"] is True
+    assert data["outcome"] == "timeout"
+
+
+@pytest.mark.integration
+def test_timeout_is_a_draw_when_the_winner_has_insufficient_material(client):
+    client.post("/new-game", json={"color": "white"})
+    app.state.game = Game(user_color="white", fen=BLACK_BARE_KING_FEN)
+    app.state.clock = Clock(white_ms=0, black_ms=60_000, increment_ms=0)
+
+    response = client.post("/timeout", json={"color": "white"})
+
+    data = response.json()
+    assert data["is_over"] is True
+    assert data["outcome"] == "insufficient_material"
+
+
+@pytest.mark.integration
+def test_timeout_is_a_no_op_when_the_color_has_not_actually_flagged(client):
+    client.post("/new-game", json={"color": "white", "clock": "blitz"})
+
+    response = client.post("/timeout", json={"color": "white"})
+
+    data = response.json()
+    assert data["is_over"] is False
+    assert data["outcome"] is None
+
+
+@pytest.mark.integration
+def test_timeout_is_a_no_op_without_any_clock(client):
+    client.post("/new-game", json={"color": "white"})  # no clock preset
+
+    response = client.post("/timeout", json={"color": "white"})
+
+    data = response.json()
+    assert data["is_over"] is False
+    assert data["outcome"] is None
+
+
+@pytest.mark.integration
+def test_move_is_rejected_once_the_game_has_ended_on_time(client):
+    client.post("/new-game", json={"color": "white"})
+    app.state.clock = Clock(white_ms=0, black_ms=60_000, increment_ms=0)
+    client.post("/timeout", json={"color": "white"})
+
+    response = client.post("/move", json={"uci": "e2e4"})
+
+    assert response.status_code == 400
+
+
+@pytest.mark.integration
+def test_take_back_is_rejected_once_the_game_has_ended_on_time(client):
+    client.post("/new-game", json={"color": "white"})
+    app.state.clock = Clock(white_ms=0, black_ms=60_000, increment_ms=0)
+    client.post("/timeout", json={"color": "white"})
+
+    response = client.post("/take-back")
+
+    assert response.status_code == 400
+
+
+@pytest.mark.integration
+def test_a_move_arriving_after_the_mover_already_flagged_ends_the_game_instead(client):
+    client.post("/new-game", json={"color": "white"})
+    # The clock ran out between the last response and this request --
+    # the move itself must never be applied.
+    app.state.clock = Clock(white_ms=0, black_ms=60_000, increment_ms=0)
+    fen_before = app.state.game.fen
+
+    response = client.post("/move", json={"uci": "e2e4"})
+
+    data = response.json()
+    assert data["is_over"] is True
+    assert data["outcome"] == "timeout"
+    assert app.state.game.fen == fen_before  # the move was never pushed

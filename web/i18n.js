@@ -63,6 +63,7 @@ const STRINGS = {
             fivefold_repetition: "fivefold repetition",
             fifty_moves: "fifty-move rule",
             threefold_repetition: "threefold repetition",
+            timeout: "time forfeit",
         },
     },
     "pt-BR": {
@@ -102,6 +103,7 @@ const STRINGS = {
             fivefold_repetition: "repetição quíntupla",
             fifty_moves: "regra dos 50 lances",
             threefold_repetition: "repetição tripla",
+            timeout: "tempo esgotado",
         },
     },
 }
