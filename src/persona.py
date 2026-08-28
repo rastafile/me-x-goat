@@ -13,7 +13,9 @@ from src.engine import Candidate
 
 _SHORT_MATE_MAX = 3  # design.md #7: the GOAT always executes mate up to here
 
-# Starting point from docs/week-1.md, to be calibrated in week 2.
+# Starting point from docs/week-1.md. Week 6's self-play data (ADR 10)
+# didn't surface a case for changing these numbers -- still a guess, just
+# no longer an unexamined one.
 _MARGIN_TABLE = [
     (800, 300),
     (1200, 180),
@@ -38,7 +40,13 @@ WEIGHTS: dict[str, float] = {
     "toward_endgame": 2.5,
     "improve_worst_piece": 1.5,
     "keep_tension": 1.5,
-    "avoid_chaos": 1.0,
+    # 1.0 was as arbitrary a guess as the rest of this table -- and, until
+    # avoid_chaos's own logic fix (week 6, docs/decisions.md), the number
+    # here had literally no effect on any game ever played. Raised to match
+    # the other "medium" tier heuristics now that it can actually compete
+    # with them; docs/week-6.md session 2 re-ran the self-play harness
+    # against this value before settling on it.
+    "avoid_chaos": 1.5,
 }
 
 
@@ -99,12 +107,26 @@ def keep_tension(board_fen: str, candidate: Candidate, candidates: list[Candidat
 
 def avoid_chaos(board_fen: str, candidate: Candidate, candidates: list[Candidate]) -> tuple[float, str | None]:
     board = chess.Board(board_fen)
-    scores = [c.score_cp if board.turn == chess.WHITE else -c.score_cp for c in candidates]
+    white_to_move = board.turn == chess.WHITE
+    scores = [c.score_cp if white_to_move else -c.score_cp for c in candidates]
     if len(scores) < 2:
         return 0.0, None
-    if max(scores) - min(scores) > _CHAOS_SPREAD_CP:
-        return -WEIGHTS["avoid_chaos"], "avoid_chaos"
-    return 0.0, None
+    spread = max(scores) - min(scores)
+    if spread <= _CHAOS_SPREAD_CP:
+        return 0.0, None
+    # Week 6 self-play data: as originally written, this penalized every
+    # survivor in a chaotic position identically (it only looked at the
+    # whole candidate set, never at `candidate` itself), so it could never
+    # change which one won -- 0 of 3905 firings were decisive. Scaled by
+    # how far this candidate's own evaluation sits from the engine's actual
+    # best line (max(scores)), relative to the position's full spread: the
+    # calmest, top-scored option gets no penalty, and the further a
+    # candidate is from it, the more a chaotic position counts against it.
+    mover_cp = candidate.score_cp if white_to_move else -candidate.score_cp
+    deviation = max(scores) - mover_cp
+    if deviation == 0:
+        return 0.0, None
+    return -WEIGHTS["avoid_chaos"] * (deviation / spread), "avoid_chaos"
 
 
 _STYLES: dict[str, list[Heuristic]] = {

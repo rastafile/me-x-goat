@@ -353,3 +353,98 @@ with a full offline fallback from the start; the UI chrome doing
 otherwise, just to save a vendoring step, would be a real regression in a
 project that treats "runs entirely on your machine" as a repeated,
 explicit selling point, not an implementation detail.
+
+---
+
+## ADR 10: `avoid_chaos`'s per-candidate scoring, and calibrating `WEIGHTS` from self-play data
+
+### Context
+
+`persona.py`'s `WEIGHTS` table (and `_MARGIN_TABLE`) were a week-1 guess,
+never revisited — `CLAUDE.md`'s Scope section listed "weight calibration
+(guess now, measure later)" as explicitly out of phase through week 5.
+`docs/week-6.md` unlocks it: `tools/self_play.py` plays `persona.py`
+against itself and reports how often each heuristic tag actually fires and
+whether it changes the winning candidate.
+
+180 self-play games across the six strength anchors (800-2800, 30 games
+each, 18,565 plies total) surfaced two distinct findings:
+
+1. `queen_trade` (weight 3.0, the highest) fired on 0.2% of plies;
+   `keep_tension` (1.5) fired on 0.7%. Both conditions are narrow by design
+   (an exact eval-range queen trade; a specific central-pawn-tension
+   square) and rarely available among the engine's top-5 candidates in
+   self-play. This is a firing-*condition* property, out of scope here —
+   this session deliberately kept conditions untouched, weights only.
+2. `avoid_chaos` (weight 1.0) fired on ~20-23% of plies across all six
+   strengths — and was decisive (changed the winning candidate) exactly 0
+   times out of 3,905 firings. Reading the code explains why: it computed
+   the position's overall score spread (chaotic or not) but applied the
+   resulting penalty *identically to every survivor*, never looking at the
+   individual candidate being scored. A constant additive penalty shared by
+   every option in an argmax comparison can never change which one wins, at
+   any weight — this was not a calibration problem, it was a logic bug
+   present since the heuristic was first written.
+
+### Decision
+
+Two changes, addressing the two findings differently:
+
+- **`avoid_chaos` rewritten to be per-candidate.** It now penalizes each
+  survivor in proportion to how far its own evaluation sits from the
+  position's best-scored candidate, relative to the position's full spread:
+  the calmest, top-scored option draws no penalty; the further a candidate
+  deviates from the objectively best line, the more a chaotic position
+  counts against it. Proven mechanically capable of changing a choice for
+  the first time by a dedicated regression test
+  (`test_avoid_chaos_can_change_which_candidate_choose_picks`), which uses
+  a temporarily inflated weight to isolate the mechanism from the
+  calibration question below.
+- **`WEIGHTS["avoid_chaos"]` raised from 1.0 to 1.5**, matching
+  `keep_tension`/`improve_worst_piece`'s "medium" tier (`design.md` §5) now
+  that the weight has a real effect for the first time. Re-running the
+  harness at 1.5 (800/1600/2400, 20 games each) still found 0 decisive
+  firings out of 123. Rather than conclude the weight was still too low,
+  a further exploratory run at 3.0 — `queen_trade`'s own "high" tier value,
+  the highest in the table — found only 2 decisive firings out of 62
+  (~3%) at strengths 1200/2000. Going from "mechanically incapable" (1.0)
+  to "occasionally decisive even at the top of the scale" (3.0) confirms
+  this is not a case of an under-weighted trait: `avoid_chaos`'s penalty
+  can never disagree with the engine's own cp ranking (it always favors the
+  higher-scored candidate, same direction the base tie-break already
+  favors), so it can only ever *counteract* another heuristic's pull toward
+  a worse-scored candidate — a real but narrow role by construction, not
+  a symptom of insufficient weight. 1.5 keeps it correctly in its designed
+  tier rather than inflating it into "high" territory for a few points of
+  marginal effect.
+- `queen_trade`, `toward_endgame`, `improve_worst_piece`, and
+  `keep_tension`'s weights are unchanged — their self-play firing rates
+  reflect narrow or permissive *conditions*, not miscalibrated weights, and
+  this session deliberately kept conditions out of scope (see
+  `docs/week-6.md`).
+- `_MARGIN_TABLE` and `_CHAOS_SPREAD_CP` are unchanged — nothing in this
+  data pointed at either needing adjustment.
+
+### Rejected alternative
+
+Raising `avoid_chaos`'s weight alone, without touching its scoring logic.
+Mathematically impossible to work: a uniform penalty across every survivor
+never changes an argmax comparison, at any weight — confirmed by the 0/123
+result at 1.5 with the *fixed* logic already testing well above the
+original weight, let alone the unfixed version.
+
+### Known limitation
+
+`queen_trade` and `keep_tension` remain rare in self-play (and, by the same
+reasoning, in real games) because their firing conditions are narrow. Their
+weights are correctly high/medium per `design.md` §5's own intent — they're
+infrequently *applicable*, not infrequently *weighted*. Widening either
+condition is a legitimate future change, deliberately deferred: this
+session was scoped to weights only, and a condition change is a different
+kind of decision (behavioral, not numeric) that deserves its own review.
+
+`avoid_chaos` itself remains a rare, subtle influence even after the fix —
+by design, not by accident: it only ever matters when another heuristic
+is actively pulling toward a worse-scored, more volatile candidate in an
+already-sharp position, which is an uncommon combination. This is a real
+trait, correctly scoped, not a heuristic still waiting on more calibration.
