@@ -3,15 +3,15 @@
 A local chess study app. The user plays against an opponent with a grandmaster
 persona and receives analysis from an independent tutor after each of their moves.
 
-Full spec in `docs/design.md`. Weeks 1-6's plans are in `docs/week-1.md` through
-`docs/week-6.md` (all done — v1 complete, the `web/` chrome redesign documented
-in `docs/ui-reference/`, and week 6's data-driven weight calibration plus a
-curated opening book, both deliberately unlocked from the Scope section
-below). `docs/week-6-ux-quickfix.md` is a small out-of-band session (play
-immediately on load) that ran alongside week 6. Current week's plan is in
-`docs/week-7.md` (an optional chess clock, off by default). Read the spec and
-the current week's plan before writing code. If this file and the spec
-disagree, this file wins and the spec should be corrected.
+Full spec in `docs/design.md`. Weeks 1-7's plans are in `docs/week-1.md` through
+`docs/week-7.md` (all done — v1 complete, the `web/` chrome redesign documented
+in `docs/ui-reference/`, week 6's data-driven weight calibration plus a curated
+opening book (both deliberately unlocked from the Scope section below), and
+week 7's optional chess clock). `docs/week-6-ux-quickfix.md` is a small
+out-of-band session (play immediately on load) that ran alongside week 6. No
+week-8 plan exists yet. Read the spec and the current week's plan before
+writing code. If this file and the spec disagree, this file wins and the spec
+should be corrected.
 
 ## Invariants
 
@@ -58,7 +58,16 @@ One module, one responsibility. None of them import the server.
   `loss_cp` helper for how far a candidate sits behind the best one.
 - `game.py` — game state. Wraps `python-chess`. Nothing else touches the board.
 - `persona.py` — pure function. Picks the opponent's move from the candidates using
-  style weights. No network, no state, no Stockfish.
+  style weights, or a curated opening book while the game is still in book. No
+  network, no state, no Stockfish.
+- `opening_book.py` — pure function. Matches the move history so far against a
+  curated, per-style, per-color set of lines and returns the next move, or `None`.
+  No network, no Stockfish, no state.
+- `clock.py` — the optional chess clock's bookkeeping. Not pure (wall-clock time is
+  an inherent side effect) but every method takes `now_ms` as an explicit parameter
+  rather than reading the clock itself, so it stays deterministically testable.
+  Orchestration state, same category as `server.py`'s mistake counts -- never
+  touches `persona.py`'s move choice.
 - `tutor.py` — pure function. Classifies a move (excellent through blunder) by
   comparing an `Analysis` from before it and one from after it -- never touches
   `persona.py`. No network, no state.

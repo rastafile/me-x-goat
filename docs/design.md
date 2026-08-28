@@ -345,7 +345,35 @@ minimal: one line, for White only, sourced from a single user-supplied
 game. More lines are a data addition to `data/opening_books/carlsen.json`,
 not a code change.
 
-## 12. Build order
+## 12. The chess clock
+
+Optional, off by default -- "originally we can play without time" was the
+starting premise, and untimed play stays exactly as it always worked.
+`src/clock.py` (`docs/decisions.md` ADR 12) tracks it as orchestration
+state, the same category as the mistake counts: it never influences which
+move `persona.py` picks.
+
+Five presets, chosen when starting a game: no clock, Bullet (1+0), Blitz
+(3+2), Rapid (10+5), Classical (30+0). No free-form minutes/increment
+input in v1.
+
+Both sides are timed identically. The GOAT's own analysis time is
+unaffected -- it keeps the same strength-based budget (§5's "Strength
+adjustment", 50-800ms per move) regardless of its own remaining clock, so
+in practice it never runs meaningfully low. No adaptive time management.
+
+A side that runs out of time loses, unless its opponent has insufficient
+material to deliver mate under any sequence of legal moves (FIDE's own
+rule) -- then it's a draw, reported the same way an ordinary
+insufficient-material draw is. Reported to the client as its own
+`ended_by_timeout` flag, since the outcome string alone can't
+distinguish a clock-caused draw from an ordinary one.
+
+Take-back never refunds time already spent. It also can't resume a game
+the clock has already ended -- unlike a checkmate, there's no position to
+return to, since it was the clock, not the board, that ended things.
+
+## 13. Build order
 
 1. `engine.py` + `game.py` — playable in the terminal against raw Stockfish.
 2. `persona.py` — the GOAT gains style, still without prose.
