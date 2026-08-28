@@ -266,14 +266,19 @@ low strength, but not so inattentive as to miss an obvious mate.
 
 - cm-chessboard board: drag pieces, last-move highlight, legal destinations, premove.
 - Tutor panel, GOAT panel, and game plan panel visually distinct — three voices,
-  three places.
+  three places, in chronological order (tutor reacts to the user's move first,
+  then the GOAT's reply, then the game plan). Told apart by typography alone
+  (alignment, weight, style), not color.
 - Game plan in its own persistent area.
 - Evaluation bar on the side, with a hide option.
 - Mate badge above the board per section 7, with its own switch.
 - Board orientation follows the user's color, their pieces at the bottom.
 - Controls: color, strength, style, theme, language, mate badge, evaluation bar,
-  take back, new game, export PGN.
-- Color is chosen on the new-game screen and does not change mid-game.
+  take back, export PGN, all in a collapsible settings panel behind a header
+  toggle, collapsed by default. There is no separate "new game" control —
+  choosing a color starts a game immediately, and remains the way to start
+  another one mid-session.
+- Color does not change mid-game.
 
 ### Themes
 
