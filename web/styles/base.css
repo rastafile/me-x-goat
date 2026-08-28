@@ -123,6 +123,30 @@ body {
   display: none;
 }
 
+/* docs/week-7.md session 2: same monospace-numerals convention as
+   .settings-value -- no boxes, no chips, told apart from the resting
+   state by weight and color alone (.is-running), matching how the three
+   voice panels (docs/week-5.md session 3) are told apart by typography
+   rather than color blocks. Empty (and hidden) whenever this game has no
+   time control -- app.js only ever sets text here when white_time_ms is
+   a real number. */
+.clock {
+  font-family: ui-monospace, Menlo, Consolas, monospace;
+  font-size: 0.85rem;
+  color: var(--on-surface-variant);
+  text-align: center;
+  margin: 0.35rem 0;
+}
+
+.clock:empty {
+  display: none;
+}
+
+.clock.is-running {
+  font-weight: 600;
+  color: var(--on-surface);
+}
+
 /* docs/week-5.md session 1: a slim header, title centered between an
    invisible spacer (left) and the one settings trigger (right), so
    removing/adding an icon on one side never re-centers the title. */

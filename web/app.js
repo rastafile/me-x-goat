@@ -24,6 +24,9 @@ const evalBarToggle = document.getElementById("eval-bar-toggle")
 const settingsToggle = document.getElementById("settings-toggle")
 const settingsPanel = document.getElementById("settings-panel")
 const colorChoices = document.getElementById("color-choices")
+const clockInput = document.getElementById("clock-input")
+const opponentClockEl = document.getElementById("opponent-clock")
+const userClockEl = document.getElementById("user-clock")
 
 const DEFAULT_THEME = "wood"
 const THEME_STORAGE_KEY = "theme"
@@ -50,6 +53,17 @@ let isSubmitting = false
 // dynamic panels (tutor, mistake counts, summary) without a round trip --
 // null until the first /new-game response arrives.
 let lastState = null
+
+// docs/week-7.md session 2: the server is the source of truth for the
+// clock (docs/week-7.md session 0/1) -- this is only a locally-ticking
+// *display*, resynced from scratch on every response. null means no time
+// control this game. runningColor is derived from the response's own FEN
+// (whoever's turn it is next), not tracked separately -- after any
+// non-terminal response the server has always already played the GOAT's
+// reply, so this is the user's own color in every case that actually
+// ticks visibly; the other side only ever shows its last-known value.
+let clockState = null
+let clockTimeoutReported = false
 
 const board = new Chessboard(document.getElementById("board"), {
     position: START_FEN,
@@ -174,6 +188,7 @@ async function startNewGame(color) {
             // localStorage via i18n.js, always in sync with this select's
             // value.
             language: languageInput.value,
+            clock: clockInput.value,
         }),
     })
     const state = await response.json()
@@ -294,7 +309,83 @@ function applyState(state) {
     exportPgnButton.disabled = false
 
     renderDynamicPanels(state)
+    applyClockState(state)
 }
+
+function applyClockState(state) {
+    if (typeof state.white_time_ms !== "number") {
+        clockState = null
+        renderClocks()
+        return
+    }
+    clockState = {
+        whiteMs: state.white_time_ms,
+        blackMs: state.black_time_ms,
+        // Whoever's turn the position is in now -- null once the game is
+        // over, since nothing should keep ticking down past that point.
+        runningColor: state.is_over ? null : (state.fen.split(" ")[1] === "w" ? "white" : "black"),
+        syncedAtMs: performance.now(),
+    }
+    clockTimeoutReported = false
+    renderClocks()
+}
+
+function renderClocks() {
+    if (clockState === null) {
+        opponentClockEl.textContent = ""
+        userClockEl.textContent = ""
+        opponentClockEl.classList.remove("is-running")
+        userClockEl.classList.remove("is-running")
+        return
+    }
+
+    const elapsedMs = clockState.runningColor === null ? 0 : performance.now() - clockState.syncedAtMs
+    const liveMs = {
+        white: clockState.whiteMs - (clockState.runningColor === "white" ? elapsedMs : 0),
+        black: clockState.blackMs - (clockState.runningColor === "black" ? elapsedMs : 0),
+    }
+    const opponentColor = userColor === "white" ? "black" : "white"
+
+    opponentClockEl.textContent = formatClock(liveMs[opponentColor])
+    userClockEl.textContent = formatClock(liveMs[userColor])
+    opponentClockEl.classList.toggle("is-running", clockState.runningColor === opponentColor)
+    userClockEl.classList.toggle("is-running", clockState.runningColor === userColor)
+
+    // Only the user's own clock is ever watched client-side -- the GOAT's
+    // reply happens synchronously within a single request/response, so
+    // its clock is already checked server-side (docs/week-7.md session 1)
+    // by the time there's a response to render at all.
+    if (clockState.runningColor === userColor && liveMs[userColor] <= 0 && !clockTimeoutReported) {
+        clockTimeoutReported = true
+        reportTimeout(userColor)
+    }
+}
+
+function formatClock(ms) {
+    const totalSeconds = Math.max(0, Math.round(ms / 1000))
+    const minutes = Math.floor(totalSeconds / 60)
+    const seconds = totalSeconds % 60
+    return `${minutes}:${String(seconds).padStart(2, "0")}`
+}
+
+async function reportTimeout(color) {
+    const response = await fetch("/timeout", {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({color}),
+    })
+    if (!response.ok) {
+        return
+    }
+    const state = await response.json()
+    applyState(state)
+    // Same pattern takeBack() uses: harmless when the game is still in
+    // progress (the false-alarm/no-op case), disables input for real once
+    // gameOver is actually true.
+    enableUserInput()
+}
+
+setInterval(renderClocks, 250)
 
 // Everything server-driven that a language switch must be able to
 // re-render on the spot, without a round trip -- as opposed to the static
