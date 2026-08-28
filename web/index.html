@@ -86,6 +86,19 @@
     </select>
   </div>
   <div class="settings-row">
+    <label class="settings-label" for="clock-input" data-i18n="clock">Clock:</label>
+    <!-- docs/week-7.md: presets only, no free-form minutes/increment
+         input -- off ("none") by default, matching untimed play exactly
+         as it worked before this week. -->
+    <select class="settings-select" id="clock-input">
+      <option value="none" data-i18n="clockNone">No clock</option>
+      <option value="bullet" data-i18n="clockBullet">Bullet (1+0)</option>
+      <option value="blitz" data-i18n="clockBlitz">Blitz (3+2)</option>
+      <option value="rapid" data-i18n="clockRapid">Rapid (10+5)</option>
+      <option value="classical" data-i18n="clockClassical">Classical (30+0)</option>
+    </select>
+  </div>
+  <div class="settings-row">
     <label class="settings-label" for="mate-badge-toggle" data-i18n="mateBadgeToggle">Mate badge</label>
     <span class="settings-switch">
       <input type="checkbox" id="mate-badge-toggle" checked>
@@ -106,6 +119,14 @@
      there's nothing to announce or the switch above is off. -->
 <div id="mate-badge"></div>
 
+<!-- docs/week-7.md session 2: two clock displays, positioned like the
+     board itself -- "opponent" above, "user" below -- so they read
+     correctly regardless of which color the user is playing, the same
+     way board orientation already keeps the user's own pieces at the
+     bottom without any color-specific markup. Empty (and hidden, see
+     base.css) whenever this game has no time control. -->
+<div id="opponent-clock" class="clock"></div>
+
 <div id="board-row">
   <!-- design.md §8: "Evaluation bar on the side, with a hide option."
        Fill grows from the bottom -- the user's own pieces are always at
@@ -116,6 +137,8 @@
   </div>
   <div id="board"></div>
 </div>
+
+<div id="user-clock" class="clock"></div>
 
 <div id="controls">
   <button type="button" id="take-back-button" data-i18n="takeBack" disabled>Take back</button>
